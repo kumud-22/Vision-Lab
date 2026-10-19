@@ -183,7 +183,7 @@ if (isDev) {
 }
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🚀 Roboflow WebRTC Proxy Server ${isDev ? '(Development)' : '(Production)'}`);
   console.log(`   Local:    http://localhost:${PORT}`);
   console.log(`   API:      http://localhost:${PORT}/api/init-webrtc`);
