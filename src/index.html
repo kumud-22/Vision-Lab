@@ -1,576 +1,955 @@
+
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#080b16" />
-  <title>AI Vision Lab</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080b14">
+  <title>VISION LAB // AI Object Detection</title>
 
   <style>
     :root {
-      --bg: #080b16;
-      --panel: #101629;
-      --panel2: #141d32;
-      --text: #f1f5ff;
-      --muted: #96a4c1;
-      --accent: #47eaff;
-      --border: #25334c;
-      --danger: #ff647c;
-      --success: #70ffb0;
+      color-scheme: dark;
+      --bg: #080b14;
+      --panel: #101625;
+      --panel2: #0b1120;
+      --line: rgba(148,163,184,.16);
+      --cyan: #39e7ff;
+      --purple: #a78bfa;
+      --muted: #8996ad;
+      --text: #eef5ff;
+      --green: #51f5ae;
     }
 
     * { box-sizing: border-box; }
 
     body {
       margin: 0;
+      min-height: 100vh;
       background:
-        radial-gradient(ellipse at 10% 0%, #132447 0%, transparent 42%),
+        radial-gradient(ellipse at 15% 0%, rgba(36,110,190,.16), transparent 42%),
+        radial-gradient(ellipse at 95% 20%, rgba(128,65,220,.12), transparent 38%),
         var(--bg);
       color: var(--text);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
-      min-height: 100vh;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system,
+        BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
     button, input, select { font: inherit; }
 
     button {
       cursor: pointer;
-      border: 1px solid var(--border);
-      border-radius: 11px;
-      padding: 11px 15px;
-      color: var(--text);
-      background: var(--panel2);
+      transition: .2s ease;
     }
 
-    button:hover { border-color: var(--accent); }
-    button:disabled { opacity: .45; cursor: not-allowed; }
-
-    .primary {
-      background: var(--accent);
-      color: #041019;
-      border-color: transparent;
-      font-weight: 800;
+    button:disabled {
+      opacity: .4;
+      cursor: not-allowed;
     }
 
-    .danger { border-color: #713044; color: #ff9cac; }
-
-    .app {
+    .container {
       width: min(1500px, 100%);
       margin: auto;
-      padding: 22px;
+      padding: 24px clamp(14px, 3vw, 38px);
     }
 
-    header {
+    .topbar {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      gap: 15px;
-      flex-wrap: wrap;
-      margin-bottom: 22px;
+      justify-content: space-between;
+      gap: 18px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--line);
     }
 
-    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+    }
 
-    .logo {
+    .brand-icon {
+      width: 44px;
+      height: 44px;
       display: grid;
       place-items: center;
-      width: 45px;
-      height: 45px;
-      border: 1px solid var(--accent);
-      border-radius: 14px;
-      color: var(--accent);
+      border: 1px solid rgba(57,231,255,.45);
+      border-radius: 13px;
+      color: var(--cyan);
+      background: rgba(57,231,255,.07);
+      box-shadow: 0 0 25px rgba(57,231,255,.08);
       font-size: 23px;
-      box-shadow: 0 0 25px #47eaff20;
     }
 
-    h1 { margin: 0; font-size: 23px; letter-spacing: -.7px; }
-    .subtitle { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .eyebrow {
+      color: var(--cyan);
+      font-size: 10px;
+      letter-spacing: 2.6px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
 
-    .status {
-      display: inline-flex;
+    .brand h1 {
+      margin: 5px 0 0;
+      font-size: clamp(17px, 2.5vw, 24px);
+      letter-spacing: -.7px;
+    }
+
+    .top-status {
+      display: flex;
       align-items: center;
       gap: 8px;
-      padding: 9px 12px;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      color: var(--muted);
-      font-size: 12px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.025);
+      border-radius: 30px;
+      padding: 10px 13px;
+      color: #b6c3d8;
+      font-size: 11px;
+      white-space: nowrap;
     }
 
     .dot {
-      width: 8px;
-      height: 8px;
-      background: #8994a8;
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
+      background: #64748b;
+      display: inline-block;
+      flex-shrink: 0;
     }
 
-    .status.live .dot {
-      background: var(--success);
-      box-shadow: 0 0 12px var(--success);
+    .dot.live {
+      background: var(--green);
+      box-shadow: 0 0 12px var(--green);
+      animation: pulse 1.8s infinite;
     }
 
-    .stats {
+    .hero {
+      padding: 30px 0 25px;
+    }
+
+    .hero h2 {
+      margin: 9px 0;
+      font-size: clamp(28px, 5vw, 47px);
+      line-height: 1.08;
+      letter-spacing: -1.8px;
+    }
+
+    .gradient {
+      color: transparent;
+      background: linear-gradient(90deg, var(--cyan), var(--purple));
+      background-clip: text;
+      -webkit-background-clip: text;
+    }
+
+    .hero p {
+      color: var(--muted);
+      margin: 12px 0 0;
+      font-size: 14px;
+      line-height: 1.7;
+      max-width: 650px;
+    }
+
+    .main-layout {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      margin-bottom: 18px;
-    }
-
-    .stat, .panel {
-      background: #101629e8;
-      border: 1px solid var(--border);
-      border-radius: 17px;
-    }
-
-    .stat { padding: 17px; }
-    .stat-label { color: var(--muted); font-size: 12px; }
-    .stat-value { font-size: 26px; font-weight: 800; margin-top: 8px; }
-    .stat-note { color: var(--muted); font-size: 11px; margin-top: 5px; }
-
-    .workspace {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 330px;
-      gap: 18px;
+      grid-template-columns: minmax(0, 1.8fr) minmax(280px, .9fr);
+      gap: 20px;
       align-items: start;
     }
 
-    .panel { padding: 18px; min-width: 0; }
-    .panel-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 15px;
+    .panel {
+      background: linear-gradient(145deg, rgba(17,25,42,.96), rgba(10,15,27,.97));
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      overflow: hidden;
+      box-shadow: 0 18px 55px rgba(0,0,0,.16);
     }
 
-    h2 { font-size: 15px; margin: 0; }
-    h3 { font-size: 13px; margin: 0 0 12px; }
-    .eyebrow { color: var(--accent); font-size: 10px; letter-spacing: 1.6px; }
+    .panel-heading {
+      padding: 17px 19px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+    }
 
-    .feed {
+    .panel-title {
+      font-size: 13px;
+      font-weight: 750;
+      letter-spacing: .2px;
+    }
+
+    .panel-subtitle {
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .tiny-badge {
+      padding: 6px 9px;
+      border-radius: 6px;
+      background: rgba(57,231,255,.08);
+      border: 1px solid rgba(57,231,255,.2);
+      color: var(--cyan);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 1px;
+    }
+
+    .scanner-wrap { padding: 14px; }
+
+    .video-container {
       position: relative;
       overflow: hidden;
-      min-height: 300px;
-      aspect-ratio: 16 / 9;
-      display: grid;
-      place-items: center;
+      min-height: 250px;
+      border-radius: 11px;
       background:
-        linear-gradient(#17223b77 1px, transparent 1px),
-        linear-gradient(90deg, #17223b77 1px, transparent 1px),
-        #070b15;
-      background-size: 32px 32px;
-      border: 1px solid #273a56;
-      border-radius: 13px;
+        radial-gradient(ellipse at center, rgba(36,65,105,.16), transparent 65%),
+        #050810;
+      border: 1px solid rgba(57,231,255,.18);
     }
 
     video {
+      display: block;
       width: 100%;
-      height: 100%;
+      height: auto;
+      min-height: 250px;
+      max-height: 650px;
+      object-fit: contain;
+    }
+
+    .scanner-corners {
+      position: absolute;
+      inset: 12px;
+      pointer-events: none;
+      opacity: .75;
+      background:
+        linear-gradient(var(--cyan),var(--cyan)) left top/19px 2px no-repeat,
+        linear-gradient(var(--cyan),var(--cyan)) left top/2px 19px no-repeat,
+        linear-gradient(var(--cyan),var(--cyan)) right top/19px 2px no-repeat,
+        linear-gradient(var(--cyan),var(--cyan)) right top/2px 19px no-repeat,
+        linear-gradient(var(--cyan),var(--cyan)) left bottom/19px 2px no-repeat,
+        linear-gradient(var(--cyan),var(--cyan)) left bottom/2px 19px no-repeat,
+        linear-gradient(var(--cyan),var(--cyan)) right bottom/19px 2px no-repeat,
+        linear-gradient(var(--cyan),var(--cyan)) right bottom/2px 19px no-repeat;
+    }
+
+    .scan-line {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      opacity: 0;
+      pointer-events: none;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+      box-shadow: 0 0 17px var(--cyan);
+    }
+
+    .video-container.scanning .scan-line {
+      opacity: .8;
+      animation: scan 4s linear infinite;
+    }
+
+    .camera-placeholder {
       position: absolute;
       inset: 0;
-      object-fit: contain;
-      background: #05070d;
-    }
-
-    .placeholder {
-      z-index: 1;
-      padding: 25px;
-      max-width: 360px;
-      text-align: center;
-      color: var(--muted);
-      line-height: 1.6;
-      pointer-events: none;
-    }
-
-    .placeholder .big { font-size: 37px; margin-bottom: 10px; }
-
-    .feed-footer {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin-top: 12px;
-      color: var(--muted);
-      font-size: 11px;
-    }
-
-    .actions { display: flex; gap: 9px; flex-wrap: wrap; }
-
-    .section { margin-top: 18px; }
-    .field { margin-bottom: 13px; }
-
-    label {
-      display: block;
-      color: var(--muted);
-      font-size: 11px;
-      margin-bottom: 7px;
-    }
-
-    input, select {
-      width: 100%;
-      padding: 11px;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      color: var(--text);
-      background: #090e1b;
-      outline: none;
-    }
-
-    input:focus, select:focus { border-color: var(--accent); }
-
-    input[type="range"] { padding: 0; accent-color: var(--accent); }
-
-    .hint {
-      color: var(--muted);
-      font-size: 11px;
-      line-height: 1.6;
-      margin-top: 7px;
-    }
-
-    .detection-list, .history-list {
       display: flex;
       flex-direction: column;
-      gap: 9px;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      text-align: center;
+      pointer-events: none;
+      background: rgba(5,8,16,.88);
     }
 
-    .detection-item, .history-item {
-      background: #0a1020;
-      border: 1px solid var(--border);
+    .camera-placeholder .camera-symbol {
+      font-size: 36px;
+      color: var(--cyan);
+      filter: drop-shadow(0 0 13px rgba(57,231,255,.4));
+    }
+
+    .camera-placeholder strong { font-size: 13px; }
+
+    .camera-placeholder span {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    button {
+      border-radius: 9px;
+      padding: 11px 15px;
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    #startBtn {
+      color: #041018;
+      background: var(--cyan);
+      border: 1px solid var(--cyan);
+      box-shadow: 0 0 20px rgba(57,231,255,.12);
+    }
+
+    #startBtn:hover:not(:disabled) {
+      background: #9af5ff;
+      transform: translateY(-1px);
+    }
+
+    #stopBtn {
+      color: #e0e7f5;
+      background: rgba(255,255,255,.04);
+      border: 1px solid var(--line);
+    }
+
+    #stopBtn:hover:not(:disabled) { border-color: var(--purple); }
+
+    #status {
+      margin-left: auto;
+      padding: 8px 10px;
+      background: rgba(255,255,255,.035);
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      color: #b4c1d5;
+      font-family: ui-monospace, monospace;
+      font-size: 10px;
+    }
+
+    .status-caption {
+      color: var(--muted);
+      font-size: 11px;
+      margin: 13px 0 0;
+      line-height: 1.6;
+    }
+
+    .side-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .settings-body { padding: 15px; }
+
+    .tab-bar {
+      display: flex;
+      gap: 5px;
+      padding: 4px;
+      background: #080d18;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      margin-bottom: 15px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font-size: 10px;
+      padding: 10px 5px;
+      border-radius: 7px;
+    }
+
+    .tab-btn.active {
+      color: var(--cyan);
+      background: rgba(57,231,255,.09);
+      box-shadow: inset 0 0 0 1px rgba(57,231,255,.12);
+    }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .config-panel {
+      border: 1px solid var(--line);
       border-radius: 11px;
-      padding: 11px;
+      margin-bottom: 10px;
+      overflow: hidden;
+      background: rgba(255,255,255,.015);
     }
 
-    .detection-top {
+    .config-panel:last-child { margin-bottom: 0; }
+
+    .config-header {
       display: flex;
       justify-content: space-between;
-      gap: 8px;
       align-items: center;
+      gap: 10px;
+      padding: 13px;
+      cursor: pointer;
       font-size: 12px;
+      font-weight: 750;
+      list-style: none;
     }
 
-    .confidence { color: var(--accent); font-weight: 800; }
-    .bar { height: 4px; background: #25334c; border-radius: 8px; margin-top: 9px; overflow: hidden; }
-    .bar-fill { height: 100%; background: var(--accent); }
+    .config-header::-webkit-details-marker { display: none; }
 
-    .empty {
+    .config-header::after {
+      content: "+";
+      color: var(--cyan);
+      font-size: 18px;
+      font-weight: 400;
+    }
+
+    details[open] > .config-header::after { content: "−"; }
+
+    .config-header:hover { background: rgba(255,255,255,.025); }
+
+    .config-body { padding: 0 13px 14px; }
+
+    .config-section-title {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      font-weight: 800;
+      color: var(--purple);
+      margin: 14px 0 9px;
+    }
+
+    .config-section-title:first-child { margin-top: 0; }
+
+    .config-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .config-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .config-field label {
+      color: #9aa9c1;
+      font-size: 10px;
+      font-weight: 650;
+    }
+
+    .config-field input,
+    .config-field select {
+      width: 100%;
+      min-width: 0;
+      color: var(--text);
+      background: #0a1020;
+      border: 1px solid #26334b;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 11px;
+    }
+
+    .config-field select option {
+      color: white;
+      background: #101625;
+    }
+
+    .config-field input:focus,
+    .config-field select:focus {
+      outline: none;
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 3px rgba(57,231,255,.08);
+    }
+
+    .config-field input::placeholder { color: #56647b; }
+
+    .config-field select:disabled { opacity: .5; }
+
+    .camera-caps {
       color: var(--muted);
-      font-size: 12px;
-      line-height: 1.6;
-      padding: 15px;
-      border: 1px dashed var(--border);
-      border-radius: 10px;
+      font-size: 10px;
+      line-height: 1.5;
     }
 
-    .tabs { display: flex; gap: 7px; margin-bottom: 16px; }
-    .tab { flex: 1; font-size: 12px; }
-    .tab.active { border-color: var(--accent); color: var(--accent); }
+    .example-info {
+      font-size: 10px;
+      color: var(--muted);
+      line-height: 1.7;
+      padding: 10px;
+      border-radius: 8px;
+      background: rgba(167,139,250,.06);
+      border: 1px solid rgba(167,139,250,.12);
+      margin-bottom: 12px;
+    }
 
-    .settings-pane[hidden] { display: none; }
+    .data-preview {
+      border-top: 1px solid var(--line);
+      margin-top: 15px;
+    }
 
-    pre {
+    .data-preview-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 13px 2px 9px;
+      font-size: 10px;
+      font-weight: 750;
+      color: #bdc9dc;
+    }
+
+    .data-preview-badge {
+      color: var(--cyan);
+      background: rgba(57,231,255,.08);
+      border: 1px solid rgba(57,231,255,.17);
+      padding: 4px 7px;
+      border-radius: 5px;
+    }
+
+    .data-preview-body {
+      padding: 11px;
+      max-height: 135px;
+      overflow: auto;
+      background: #080d18;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: #a4b7d1;
+      font: 10px/1.7 ui-monospace, monospace;
       white-space: pre-wrap;
       overflow-wrap: anywhere;
-      max-height: 230px;
-      overflow: auto;
-      padding: 12px;
-      border-radius: 10px;
-      background: #070b15;
-      color: #b7c8e9;
+    }
+
+    .data-preview-body:empty::before {
+      content: "Awaiting inference data...";
+      color: #66748c;
+      font-style: italic;
+    }
+
+    .security-strip {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-top: 20px;
+      padding: 16px;
+      border: 1px solid rgba(81,245,174,.17);
+      background: rgba(81,245,174,.035);
+      border-radius: 12px;
+    }
+
+    .security-icon { font-size: 20px; }
+
+    .security-strip strong {
+      font-size: 12px;
+      color: var(--green);
+    }
+
+    .security-strip p {
+      color: var(--muted);
       font-size: 11px;
+      line-height: 1.7;
+      margin: 6px 0 0;
     }
 
-    .notice {
-      border: 1px solid #2d4962;
-      background: #0b1a2a;
-      border-radius: 10px;
-      padding: 11px;
-      font-size: 11px;
-      line-height: 1.6;
-      color: #b9d6ef;
+    .security-strip code {
+      color: #b7d5e5;
+      overflow-wrap: anywhere;
     }
 
-    .theme-cyan { --accent: #47eaff; }
-    .theme-purple { --accent: #bd8aff; }
-    .theme-green { --accent: #70ffb0; }
-    .theme-pink { --accent: #ff83c8; }
-    .theme-blue { --accent: #7aa7ff; }
-
-    body.compact .panel { padding: 12px; }
-    body.compact .section { margin-top: 12px; }
-
-    @media (max-width: 900px) {
-      .workspace { grid-template-columns: 1fr; }
-      .stats { grid-template-columns: 1fr; }
-      .stat { padding: 13px; }
-      .stat-value { font-size: 22px; }
+    .footer {
+      text-align: center;
+      padding: 27px 0 7px;
+      color: #66748c;
+      font-size: 10px;
+      letter-spacing: .4px;
     }
 
-    @media (max-width: 520px) {
-      .app { padding: 12px; }
-      .feed { min-height: 220px; }
-      h1 { font-size: 19px; }
-      .panel { padding: 13px; }
+    .footer a {
+      color: var(--cyan);
+      text-decoration: none;
+    }
+
+    @keyframes scan {
+      from { transform: translateY(0); }
+      to { transform: translateY(350px); }
+    }
+
+    @keyframes pulse {
+      0%,100% { opacity: 1; }
+      50% { opacity: .45; }
+    }
+
+    @media (max-width: 850px) {
+      .main-layout { grid-template-columns: 1fr; }
+      .side-stack { order: 2; }
+      .video-column { order: 1; }
+    }
+
+    @media (max-width: 480px) {
+      .container { padding: 17px 12px; }
+      .topbar { align-items: flex-start; }
+      .top-status { font-size: 9px; padding: 8px; }
+      .brand-icon { width: 38px; height: 38px; }
+      .hero { padding-top: 25px; }
+      .hero h2 { letter-spacing: -1px; }
+      .scanner-wrap { padding: 9px; }
+      .video-container, video { min-height: 215px; }
+      .controls { gap: 8px; }
+      .controls button { padding: 10px 12px; }
+      #status { font-size: 9px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        transition-duration: .01ms !important;
+      }
     }
   </style>
 </head>
 
-<body class="theme-cyan">
-  <div class="app">
-    <header>
+<body>
+  <div class="container">
+
+    <header class="topbar">
       <div class="brand">
-        <div class="logo">⌁</div>
+        <div class="brand-icon">⌘</div>
         <div>
-          <h1>AI VISION LAB</h1>
-          <div class="subtitle">REAL-TIME OBJECT INTELLIGENCE · EXHIBITION BUILD</div>
+          <div class="eyebrow">Computer Vision System</div>
+          <h1>VISION<span class="gradient">LAB</span></h1>
         </div>
       </div>
 
-      <div class="status" id="statusPill">
-        <span class="dot"></span>
-        <span id="status">Ready to initialise</span>
+      <div class="top-status">
+        <span class="dot" id="liveDot"></span>
+        <span id="liveLabel">SYSTEM STANDBY</span>
       </div>
     </header>
 
-    <section class="stats">
-      <div class="stat">
-        <div class="stat-label">DETECTIONS RECEIVED</div>
-        <div class="stat-value" id="dataCount">0</div>
-        <div class="stat-note">Data messages from your workflow</div>
-      </div>
-      <div class="stat">
-        <div class="stat-label">VISIBLE OBJECTS</div>
-        <div class="stat-value" id="visibleCount">0</div>
-        <div class="stat-note">After confidence filtering</div>
-      </div>
-      <div class="stat">
-        <div class="stat-label">SESSION HISTORY</div>
-        <div class="stat-value" id="historyCount">0</div>
-        <div class="stat-note">Stored in this page until refreshed</div>
-      </div>
+    <section class="hero">
+      <div class="eyebrow">01 / Real-time intelligence</div>
+      <h2>See the world<br><span class="gradient">through AI.</span></h2>
+      <p>
+        An interactive computer vision experience.
+        Activate the scanner and watch artificial intelligence
+        interpret the world in real time.
+      </p>
     </section>
 
-    <main class="workspace">
-      <section class="panel">
-        <div class="panel-head">
+    <main class="main-layout">
+
+      <section class="video-column">
+        <div class="panel">
+
+          <div class="panel-heading">
+            <div>
+              <div class="panel-title">Live Vision Feed</div>
+              <div class="panel-subtitle">Real-time camera inference</div>
+            </div>
+            <span class="tiny-badge">VISION / 01</span>
+          </div>
+
+          <div class="scanner-wrap">
+            <div class="video-container" id="scannerFrame">
+
+              <video id="video" autoplay playsinline muted></video>
+
+              <div class="scanner-corners"></div>
+              <div class="scan-line"></div>
+
+              <div class="camera-placeholder" id="cameraPlaceholder">
+                <div class="camera-symbol">⌁</div>
+                <strong>VISION SYSTEM STANDBY</strong>
+                <span>Activate the camera to begin scanning</span>
+              </div>
+
+            </div>
+
+            <div class="controls">
+              <button id="startBtn">▶ &nbsp; Start Scanner</button>
+              <button id="stopBtn" disabled>■ &nbsp; Stop</button>
+              <div id="status">Idle</div>
+            </div>
+
+            <p class="status-caption">
+              Camera access is requested only when you start the scanner.
+              Allow permission in your browser to begin.
+            </p>
+
+            <div class="data-preview">
+              <div class="data-preview-header">
+                <span>⌁ &nbsp; INFERENCE DATA STREAM</span>
+                <span class="data-preview-badge" id="dataCount">0 EVENTS</span>
+              </div>
+              <div class="data-preview-body" id="dataPreview"></div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="security-strip">
+          <div class="security-icon">◈</div>
           <div>
-            <div class="eyebrow">01 / LIVE SYSTEM</div>
-            <h2 style="margin-top:6px">Live Vision Feed</h2>
-          </div>
-          <div class="actions">
-            <button id="startBtn" class="primary">▶ Start camera</button>
-            <button id="stopBtn" disabled>■ Stop</button>
-          </div>
-        </div>
-
-        <div class="feed" id="feed">
-          <video id="video" autoplay playsinline muted hidden></video>
-          <div class="placeholder" id="feedPlaceholder">
-            <div class="big">⌁</div>
-            <strong>Vision system standing by</strong>
-            <div>Start the camera to begin real-time object detection.</div>
-          </div>
-        </div>
-
-        <div class="feed-footer">
-          <span id="feedStatus">Camera inactive</span>
-          <span>Secure backend connection · No API key in browser code</span>
-        </div>
-
-        <div class="section">
-          <div class="panel-head">
-            <h2>Detection Output</h2>
-            <button id="clearHistoryBtn">Clear history</button>
-          </div>
-          <div class="detection-list" id="detectionsList">
-            <div class="empty">Detected objects will appear here when prediction data is received.</div>
-          </div>
-        </div>
-
-        <div class="section">
-          <div class="panel-head">
-            <h2>Raw Workflow Data</h2>
-            <button id="toggleRawBtn">Show data</button>
-          </div>
-          <pre id="dataPreview" hidden>No data received yet.</pre>
-        </div>
-
-        <div class="section">
-          <h2 style="margin-bottom:12px">Recent Detection History</h2>
-          <div class="history-list" id="historyList">
-            <div class="empty">Your session history will appear here.</div>
+            <strong>SECURE INFERENCE CONNECTION</strong>
+            <p>
+              The application uses a backend proxy to communicate
+              with Roboflow. Your private API key should remain
+              on the server and must not be included in frontend code.
+            </p>
           </div>
         </div>
       </section>
 
-      <aside class="panel">
-        <div class="eyebrow">02 / CONTROL CENTRE</div>
-        <h2 style="margin:6px 0 16px">Lab Dashboard</h2>
+      <aside class="side-stack">
 
-        <div class="tabs">
-          <button class="tab active" data-tab="display">Display</button>
-          <button class="tab" data-tab="camera">Camera</button>
-          <button class="tab" data-tab="workflow">Workflow</button>
-        </div>
-
-        <section class="settings-pane" id="pane-display">
-          <h3>Appearance</h3>
-          <div class="field">
-            <label for="themeSelect">Neon theme</label>
-            <select id="themeSelect">
-              <option value="cyan">Cyber cyan</option>
-              <option value="purple">Quantum purple</option>
-              <option value="green">Matrix green</option>
-              <option value="pink">Neon pink</option>
-              <option value="blue">Electric blue</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="layoutSelect">Dashboard layout</label>
-            <select id="layoutSelect">
-              <option value="normal">Standard</option>
-              <option value="compact">Compact</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="confidenceThreshold">
-              Visible confidence threshold:
-              <strong id="thresholdValue">50%</strong>
-            </label>
-            <input id="confidenceThreshold" type="range"
-              min="0" max="100" step="5" value="50" />
-            <div class="hint">
-              This filters the objects shown on this dashboard. It does not change
-              the model's server-side inference threshold.
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <div class="panel-title">System Configuration</div>
+              <div class="panel-subtitle">Manage your inference pipeline</div>
             </div>
+            <span class="tiny-badge">SETUP</span>
           </div>
 
-          <button id="saveSettingsBtn" class="primary" style="width:100%">
-            Save display settings
-          </button>
-          <div class="hint" id="settingsMessage"></div>
-        </section>
+          <div class="settings-body">
 
-        <section class="settings-pane" id="pane-camera" hidden>
-          <h3>Camera controls</h3>
-          <div class="field">
-            <label for="cameraSelect">Camera device</label>
-            <select id="cameraSelect">
-              <option value="">Default camera</option>
-            </select>
-          </div>
+            <div class="tab-bar">
+              <button type="button" class="tab-btn active" data-tab="example">
+                Quick Start
+              </button>
+              <button type="button" class="tab-btn" data-tab="custom">
+                Custom
+              </button>
+            </div>
 
-          <div class="field">
-            <label for="resolutionSelect">Resolution</label>
-            <select id="resolutionSelect">
-              <option value="640x480">640 × 480</option>
-              <option value="1280x720" selected>1280 × 720</option>
-              <option value="1920x1080">1920 × 1080</option>
-            </select>
-          </div>
+            <div class="tab-content active" id="tab-example">
+              <div class="example-info">
+                Quick Start uses the configured example workflow.
+                Choose Custom to enter your own workspace and workflow settings.
+              </div>
 
-          <div class="field">
-            <label for="fpsSelect">Target frame rate</label>
-            <select id="fpsSelect">
-              <option value="15">15 FPS</option>
-              <option value="24">24 FPS</option>
-              <option value="30" selected>30 FPS</option>
-            </select>
-          </div>
+              <div class="config-field">
+                <label for="exampleStreamOutput">STREAM VISUALIZATION</label>
+                <select id="exampleStreamOutput">
+                  <option value="labels">Labels + Bounding Boxes</option>
+                  <option value="blur">Blur Visualization</option>
+                </select>
+              </div>
+            </div>
 
-          <button id="refreshCamerasBtn" style="width:100%">Refresh camera list</button>
-          <div class="hint">Stop the camera before changing devices or resolution.</div>
-        </section>
+            <div class="tab-content" id="tab-custom">
+              <div class="config-section-title">Workflow</div>
 
-        <section class="settings-pane" id="pane-workflow" hidden>
-          <h3>Roboflow workflow</h3>
+              <div class="config-grid">
+                <div class="config-field">
+                  <label for="workspaceName">Workspace Name</label>
+                  <input type="text" id="workspaceName"
+                    placeholder="your-workspace">
+                </div>
 
-          <div class="notice" style="margin-bottom:14px">
-            Stream output and prediction data are separate. This configuration uses
-            <strong>output_image</strong> for the stream and
-            <strong>predictions</strong> for data.
-          </div>
+                <div class="config-field">
+                  <label for="workflowId">Workflow ID</label>
+                  <input type="text" id="workflowId"
+                    placeholder="my-workflow">
+                </div>
+              </div>
 
-          <div class="field">
-            <label for="workspaceName">Workspace name</label>
-            <input id="workspaceName" value="kumud-gupta" />
-          </div>
+              <div class="config-section-title">Input / Output Mapping</div>
 
-          <div class="field">
-            <label for="workflowId">Workflow ID</label>
-            <input id="workflowId"
-              value="vision-lab-vvision-lab-hlfnm-4-rfdetr-small-t1-logic" />
-          </div>
+              <div class="config-grid">
+                <div class="config-field">
+                  <label for="imageInputName">Image Input Name</label>
+                  <input type="text" id="imageInputName"
+                    placeholder="image" value="image">
+                </div>
 
-          <div class="field">
-            <label for="imageInputName">Image input name</label>
-            <input id="imageInputName" value="image" />
-          </div>
+                <div class="config-field">
+                  <label for="streamOutputNames">Stream Output Names</label>
+                  <input type="text" id="streamOutputNames"
+                    placeholder="output_image">
+                </div>
 
-          <div class="field">
-            <label for="streamOutputNames">Stream output name</label>
-            <input id="streamOutputNames" value="output_image" readonly />
-          </div>
+                <div class="config-field">
+                  <label for="dataOutputNames">Data Output Names</label>
+                  <input type="text" id="dataOutputNames"
+                    placeholder="predictions">
+                </div>
+              </div>
+            </div>
 
-          <div class="field">
-            <label for="dataOutputNames">Data output name</label>
-            <input id="dataOutputNames" value="predictions" readonly />
-          </div>
-
-          <div class="field">
-            <label for="requestedRegion">Requested region (optional)</label>
-            <input id="requestedRegion" placeholder="Leave blank for default" />
-          </div>
-
-          <div class="field">
-            <label for="requestedPlan">Requested plan (optional)</label>
-            <input id="requestedPlan" placeholder="Leave blank for default" />
-          </div>
-
-          <div class="field">
-            <label for="processingTimeout">Processing timeout (seconds)</label>
-            <input id="processingTimeout" type="number" min="1" value="30" />
-          </div>
-
-          <div class="hint">
-            The stream output is locked to a valid output from your workflow to
-            prevent the previous invalid-<code>labels</code> error.
           </div>
         </section>
 
-        <div class="section">
-          <button id="resetHistoryBtn" class="danger" style="width:100%">
-            Reset session history
-          </button>
-        </div>
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <div class="panel-title">Stream Settings</div>
+              <div class="panel-subtitle">Server and processing options</div>
+            </div>
+            <span class="tiny-badge">NETWORK</span>
+          </div>
+
+          <div class="settings-body">
+            <details class="config-panel">
+              <summary class="config-header">Connection Parameters</summary>
+              <div class="config-body">
+                <div class="config-grid">
+                  <div class="config-field">
+                    <label for="requestedRegion">Region</label>
+                    <select id="requestedRegion">
+                      <option value="us">US</option>
+                      <option value="eu">EU</option>
+                      <option value="ap">AP</option>
+                    </select>
+                  </div>
+
+                  <div class="config-field">
+                    <label for="requestedPlan">Processing Plan</label>
+                    <select id="requestedPlan">
+                      <option value="webrtc-gpu-small">GPU Small</option>
+                    </select>
+                  </div>
+
+                  <div class="config-field">
+                    <label for="processingTimeout">Session Timeout</label>
+                    <select id="processingTimeout">
+                      <option value="600">10 minutes</option>
+                      <option value="3600">60 minutes</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <details class="config-panel" id="cameraPanel">
+              <summary class="config-header">Camera Configuration</summary>
+              <div class="config-body">
+                <div class="config-grid">
+                  <div class="config-field">
+                    <label for="cameraSelect">Camera Device</label>
+                    <select id="cameraSelect" disabled>
+                      <option value="">Loading cameras...</option>
+                    </select>
+                    <div class="camera-caps" id="cameraCaps"></div>
+                  </div>
+
+                  <div class="config-field">
+                    <label for="resolutionSelect">Resolution</label>
+                    <select id="resolutionSelect" disabled>
+                      <option value="">Select camera first</option>
+                    </select>
+                  </div>
+
+                  <div class="config-field">
+                    <label for="fpsSelect">Frame Rate</label>
+                    <select id="fpsSelect" disabled>
+                      <option value="">Select camera first</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </details>
+          </div>
+        </section>
+
       </aside>
     </main>
+
+    <footer class="footer">
+      VISION LAB &nbsp;·&nbsp; REAL-TIME COMPUTER VISION
+      <br><br>
+      Powered by
+      <a href="https://www.npmjs.com/package/@roboflow/inference-sdk"
+        target="_blank" rel="noopener">@roboflow/inference-sdk</a>
+    </footer>
+
   </div>
 
-  <script type="module" src="./app.js"></script>
-
   <script>
-    const tabs = document.querySelectorAll("[data-tab]");
-    const panes = document.querySelectorAll(".settings-pane");
+    // Cosmetic UI only: does not alter the Roboflow inference pipeline.
+    const scannerFrame = document.getElementById("scannerFrame");
+    const video = document.getElementById("video");
+    const placeholder = document.getElementById("cameraPlaceholder");
+    const startButton = document.getElementById("startBtn");
+    const stopButton = document.getElementById("stopBtn");
+    const statusElement = document.getElementById("status");
+    const liveDot = document.getElementById("liveDot");
+    const liveLabel = document.getElementById("liveLabel");
 
-    tabs.forEach((tab) => {
-      tab.addEventListener("click", () => {
-        tabs.forEach((item) => item.classList.remove("active"));
-        tab.classList.add("active");
+    function updateScannerAppearance() {
+      const active =
+        !video.paused &&
+        video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+        video.videoWidth > 0;
 
-        panes.forEach((pane) => {
-          pane.hidden = pane.id !== "pane-" + tab.dataset.tab;
+      scannerFrame.classList.toggle("scanning", active);
+      placeholder.hidden = active;
+      liveDot.classList.toggle("live", active);
+      liveLabel.textContent = active ? "CAMERA ACTIVE" : "SYSTEM STANDBY";
+    }
+
+    video.addEventListener("playing", updateScannerAppearance);
+    video.addEventListener("loadeddata", updateScannerAppearance);
+    video.addEventListener("pause", updateScannerAppearance);
+    video.addEventListener("emptied", updateScannerAppearance);
+    video.addEventListener("error", updateScannerAppearance);
+
+    // Watch existing controls without replacing their click handlers.
+    const observer = new MutationObserver(() => {
+      updateScannerAppearance();
+    });
+
+    observer.observe(startButton, {
+      attributes: true,
+      attributeFilter: ["disabled"]
+    });
+
+    observer.observe(stopButton, {
+      attributes: true,
+      attributeFilter: ["disabled"]
+    });
+
+    // Preserve the original IDs and tab behavior expected by app.js.
+    document.querySelectorAll(".tab-btn").forEach(button => {
+      button.addEventListener("click", () => {
+        const target = button.dataset.tab;
+
+        document.querySelectorAll(".tab-btn").forEach(tab => {
+          tab.classList.toggle("active", tab === button);
+        });
+
+        document.querySelectorAll(".tab-content").forEach(content => {
+          content.classList.toggle("active", content.id === "tab-" + target);
         });
       });
     });
 
-    document.getElementById("toggleRawBtn").addEventListener("click", () => {
-      const preview = document.getElementById("dataPreview");
-      preview.hidden = !preview.hidden;
-      document.getElementById("toggleRawBtn").textContent =
-        preview.hidden ? "Show data" : "Hide data";
-    });
+    // Improve the existing raw data display count without changing its content.
+    const dataPreview = document.getElementById("dataPreview");
+    const dataCount = document.getElementById("dataCount");
+
+    new MutationObserver(() => {
+      const text = dataPreview.textContent.trim();
+      let count = 0;
+
+      if (text) {
+        try {
+          const parsed = JSON.parse(text);
+          if (Array.isArray(parsed)) {
+            count = parsed.length;
+          } else if (Array.isArray(parsed.predictions)) {
+            count = parsed.predictions.length;
+          } else if (parsed.predictions &&
+                     Array.isArray(parsed.predictions.predictions)) {
+            count = parsed.predictions.predictions.length;
+          } else {
+            count = 1;
+          }
+        } catch {
+          count = text ? 1 : 0;
+        }
+      }
+
+      dataCount.textContent = count + (count === 1 ? " EVENT" : " EVENTS");
+    }).observe(dataPreview, { childList: true, characterData: true, subtree: true });
   </script>
+
+  <script type="module" src="./app.js"></script>
 </body>
 </html>
