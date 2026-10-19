@@ -1,433 +1,651 @@
-/**
- * Roboflow WebRTC Secure Streaming - Frontend
- *
- * This example uses connectors.withProxyUrl() to keep your API key secure.
- * All communication with Roboflow is proxied through the backend server.
- */
 
-import { connectors, webrtc, streams } from '@roboflow/inference-sdk';
+import { connectors, webrtc, streams } from "@roboflow/inference-sdk";
 
-// Get DOM elements
-const startBtn = document.getElementById("startBtn");
-const stopBtn = document.getElementById("stopBtn");
-const statusEl = document.getElementById("status");
-const videoEl = document.getElementById("video");
-const dataPreviewEl = document.getElementById("dataPreview");
-const dataCountEl = document.getElementById("dataCount");
+/* =========================================================
+   AI VISION LAB — APPLICATION
+   API credentials remain on the backend.
+   ========================================================= */
 
-// Data channel message counter
-let dataMessageCount = 0;
+const $ = (id) => document.getElementById(id);
 
-// Config inputs - Workflow (Custom tab)
+const startBtn = $("startBtn");
+const stopBtn = $("stopBtn");
+const statusEl = $("status");
+const videoEl = $("video");
+const feedEl = $("feed");
+const placeholderEl = $("feedPlaceholder");
+const dataPreviewEl = $("dataPreview");
+const dataCountEl = $("dataCount");
+
+const detectionListEl = $("detectionsList");
+const visibleCountEl = $("visibleCount");
+const historyCountEl = $("historyCount");
+const historyListEl = $("historyList");
+const thresholdEl = $("confidenceThreshold");
+const thresholdValueEl = $("thresholdValue");
+const currentThresholdEl = $("currentThreshold");
+const themeSelectEl = $("themeSelect");
+const layoutSelectEl = $("layoutSelect");
+const settingsMessageEl = $("settingsMessage");
+
 const configInputs = {
-  workspaceName: document.getElementById("workspaceName"),
-  workflowId: document.getElementById("workflowId"),
-  imageInputName: document.getElementById("imageInputName"),
-  streamOutputNames: document.getElementById("streamOutputNames"),
-  dataOutputNames: document.getElementById("dataOutputNames")
+  workspaceName: $("workspaceName"),
+  workflowId: $("workflowId"),
+  imageInputName: $("imageInputName"),
+  streamOutputNames: $("streamOutputNames"),
+  dataOutputNames: $("dataOutputNames")
 };
 
-// Config inputs - Example tab
 const exampleInputs = {
-  streamOutput: document.getElementById("exampleStreamOutput")
+  streamOutput: $("exampleStreamOutput")
 };
 
-// Config inputs - Server settings
 const serverInputs = {
-  requestedRegion: document.getElementById("requestedRegion"),
-  requestedPlan: document.getElementById("requestedPlan"),
-  processingTimeout: document.getElementById("processingTimeout")
+  requestedRegion: $("requestedRegion"),
+  requestedPlan: $("requestedPlan"),
+  processingTimeout: $("processingTimeout")
 };
 
-// Tab elements
-const tabBtns = document.querySelectorAll(".tab-btn");
-const tabContents = document.querySelectorAll(".tab-content");
-
-// Current workflow mode: "example" or "custom"
-let workflowMode = "example";
-
-// Config inputs - Camera
 const cameraInputs = {
-  cameraSelect: document.getElementById("cameraSelect"),
-  resolutionSelect: document.getElementById("resolutionSelect"),
-  fpsSelect: document.getElementById("fpsSelect"),
-  cameraCaps: document.getElementById("cameraCaps")
+  cameraSelect: $("cameraSelect"),
+  resolutionSelect: $("resolutionSelect"),
+  fpsSelect: $("fpsSelect"),
+  cameraCaps: $("cameraCaps")
 };
 
-// Track active connection
+const tabBtns = document.querySelectorAll(".tab-btn");
+
+let workflowMode = "example";
 let activeConnection = null;
-
-// Store camera capabilities
 let cameraCapabilities = null;
+let dataMessageCount = 0;
+let confidenceThreshold = 0.70;
+let detectionHistory = [];
+let lastHistorySignature = "";
+let lastHistoryTime = 0;
+let latestPredictions = [];
 
-/**
- * Get server configuration
- */
+/* Demo workflow: explicitly returns individual predictions. */
+const WORKFLOW_SPEC = {
+  version: "1.0",
+  inputs: [
+    { type: "InferenceImage", name: "image" }
+  ],
+  steps: [
+    {
+      type: "roboflow_core/roboflow_object_detection_model@v2",
+      name: "model",
+      images: "$inputs.image",
+      model_id: "rfdetr-nano"
+    },
+    {
+      type: "roboflow_core/bounding_box_visualization@v1",
+      name: "boxes",
+      image: "$inputs.image",
+      predictions: "$steps.model.predictions"
+    },
+    {
+      type: "roboflow_core/label_visualization@v1",
+      name: "labels",
+      image: "$steps.boxes.image",
+      predictions: "$steps.model.predictions"
+    },
+    {
+      type: "roboflow_core/property_definition@v1",
+      name: "count",
+      data: "$steps.model.predictions",
+      operations: [
+        { type: "SequenceLength" }
+      ]
+    }
+  ],
+  outputs: [
+    {
+      type: "JsonField",
+      name: "labels",
+      coordinates_system: "own",
+      selector: "$steps.labels.image"
+    },
+    {
+      type: "JsonField",
+      name: "predictions",
+      coordinates_system: "own",
+      selector: "$steps.model.predictions"
+    },
+    {
+      type: "JsonField",
+      name: "count",
+      coordinates_system: "own",
+      selector: "$steps.count.output"
+    }
+  ]
+};
+
+/* -------------------- Configuration -------------------- */
+
 function getServerConfig() {
   return {
     requestedRegion: serverInputs.requestedRegion?.value || "us",
     requestedPlan: serverInputs.requestedPlan?.value || "webrtc-gpu-small",
-    processingTimeout: parseInt(serverInputs.processingTimeout?.value) || 600
+    processingTimeout:
+      Number.parseInt(serverInputs.processingTimeout?.value, 10) || 600
   };
 }
 
-/**
- * Get current workflow configuration based on selected mode
- */
 function getConfig() {
   const serverConfig = getServerConfig();
-  
+
   if (workflowMode === "example") {
     const streamOutput = exampleInputs.streamOutput?.value || "labels";
+
     return {
       mode: "example",
       workflowSpec: WORKFLOW_SPEC,
       imageInputName: "image",
       streamOutputNames: [streamOutput],
-      dataOutputNames: ["count"],
-      ...serverConfig
-    };
-  } else {
-    const workspaceName = configInputs.workspaceName?.value?.trim();
-    const workflowId = configInputs.workflowId?.value?.trim();
-    
-    if (!workspaceName || !workflowId) {
-      throw new Error("Please enter both Workspace Name and Workflow ID");
-    }
-    
-    return {
-      mode: "custom",
-      workspaceName,
-      workflowId,
-      imageInputName: configInputs.imageInputName?.value?.trim() || "image",
-      streamOutputNames: (configInputs.streamOutputNames?.value?.trim() || "output_image")
-        .split(",").map(s => s.trim()).filter(Boolean),
-      dataOutputNames: (configInputs.dataOutputNames?.value?.trim() || "predictions")
-        .split(",").map(s => s.trim()).filter(Boolean),
+      dataOutputNames: ["predictions", "count"],
       ...serverConfig
     };
   }
-}
 
-/**
- * Switch workflow tab
- */
-function switchTab(tabName) {
-  workflowMode = tabName;
-  tabBtns.forEach(btn => btn.classList.toggle("active", btn.dataset.tab === tabName));
-  tabContents.forEach(content => content.classList.toggle("active", content.id === `tab-${tabName}`));
-}
+  const workspaceName = configInputs.workspaceName?.value?.trim();
+  const workflowId = configInputs.workflowId?.value?.trim();
 
-/**
- * Get current camera configuration from form inputs
- */
-function getCameraConfig() {
-  const resolution = cameraInputs.resolutionSelect?.value?.split("x") || [];
-  const fps = parseInt(cameraInputs.fpsSelect?.value) || 30;
-  
+  if (!workspaceName || !workflowId) {
+    throw new Error("Enter your Roboflow workspace name and workflow ID in Dashboard.");
+  }
+
   return {
-    deviceId: cameraInputs.cameraSelect?.value || undefined,
-    width: resolution[0] ? parseInt(resolution[0]) : 640,
-    height: resolution[1] ? parseInt(resolution[1]) : 480,
-    frameRate: fps
+    mode: "custom",
+    workspaceName,
+    workflowId,
+    imageInputName: configInputs.imageInputName?.value?.trim() || "image",
+    streamOutputNames: (
+      configInputs.streamOutputNames?.value?.trim() || "labels"
+    ).split(",").map(value => value.trim()).filter(Boolean),
+    dataOutputNames: (
+      configInputs.dataOutputNames?.value?.trim() || "predictions"
+    ).split(",").map(value => value.trim()).filter(Boolean),
+    ...serverConfig
   };
 }
 
-/**
- * Enumerate available video input devices (cameras)
- */
+function switchTab(tabName) {
+  workflowMode = tabName;
+
+  tabBtns.forEach(button => {
+    button.classList.toggle("active", button.dataset.tab === tabName);
+  });
+
+  document.querySelectorAll(".tab-content").forEach(panel => {
+    panel.hidden = panel.id !== `tab-${tabName}`;
+  });
+}
+
+/* -------------------- Camera configuration -------------------- */
+
+function getCameraConfig() {
+  const resolution = cameraInputs.resolutionSelect?.value?.split("x") || [];
+
+  return {
+    deviceId: cameraInputs.cameraSelect?.value || undefined,
+    width: Number.parseInt(resolution[0], 10) || 1280,
+    height: Number.parseInt(resolution[1], 10) || 720,
+    frameRate: Number.parseInt(cameraInputs.fpsSelect?.value, 10) || 30
+  };
+}
+
 async function enumerateCameras() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    cameraInputs.cameraSelect.innerHTML =
+      '<option value="">Camera API unavailable</option>';
+    cameraInputs.cameraCaps.textContent =
+      "Open this site over HTTPS and allow camera access.";
+    return;
+  }
+
   try {
-  const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
-    tempStream.getTracks().forEach(track => track.stop());
-    
+    const temporaryStream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: false
+    });
+
+    temporaryStream.getTracks().forEach(track => track.stop());
+
     const devices = await navigator.mediaDevices.enumerateDevices();
     const cameras = devices.filter(device => device.kind === "videoinput");
-    
-    console.log("[Camera] Found devices:", cameras);
-    
-    cameraInputs.cameraSelect.innerHTML = "";
-    
-    if (cameras.length === 0) {
-      cameraInputs.cameraSelect.innerHTML = '<option value="">No cameras found</option>';
+
+    cameraInputs.cameraSelect.replaceChildren();
+
+    if (!cameras.length) {
+      cameraInputs.cameraSelect.innerHTML =
+        '<option value="">No cameras found</option>';
       return;
     }
-    
+
     cameras.forEach((camera, index) => {
       const option = document.createElement("option");
       option.value = camera.deviceId;
       option.textContent = camera.label || `Camera ${index + 1}`;
       cameraInputs.cameraSelect.appendChild(option);
     });
-    
+
     cameraInputs.cameraSelect.disabled = false;
-    
-    if (cameras.length > 0) {
-      await getCameraCapabilities(cameras[0].deviceId);
-    }
-    
-  } catch (err) {
-    console.error("[Camera] Failed to enumerate devices:", err);
-    cameraInputs.cameraSelect.innerHTML = '<option value="">Camera access denied</option>';
-    cameraInputs.cameraCaps.textContent = "Grant camera permission to see available devices";
+
+    await getCameraCapabilities(cameraInputs.cameraSelect.value);
+  } catch (error) {
+    console.error("[Camera] Enumeration failed:", error);
+    cameraInputs.cameraSelect.innerHTML =
+      '<option value="">Camera access denied</option>';
+    cameraInputs.cameraCaps.textContent =
+      "Allow camera access in your browser, then refresh.";
   }
 }
 
-/**
- * Get capabilities (resolutions, frame rates) for a specific camera
- */
 async function getCameraCapabilities(deviceId) {
-  cameraInputs.cameraCaps.textContent = "Detecting capabilities...";
-  cameraInputs.cameraCaps.classList.add("loading");
-  cameraInputs.resolutionSelect.disabled = true;
-  cameraInputs.fpsSelect.disabled = true;
-  
+  if (!deviceId) return;
+
+  cameraInputs.cameraCaps.textContent = "Checking camera capabilities…";
+
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { deviceId: { exact: deviceId } }
+      video: { deviceId: { exact: deviceId } },
+      audio: false
     });
-    
+
     const track = stream.getVideoTracks()[0];
-    const capabilities = track.getCapabilities();
-    const settings = track.getSettings();
-    
-    console.log("[Camera] Capabilities:", capabilities);
-    console.log("[Camera] Current settings:", settings);
-    
+    const capabilities = track.getCapabilities?.() || {};
+    const settings = track.getSettings?.() || {};
+
     cameraCapabilities = capabilities;
-    stream.getTracks().forEach(t => t.stop());
-    
+    stream.getTracks().forEach(trackItem => trackItem.stop());
+
     populateResolutions(capabilities, settings);
     populateFrameRates(capabilities, settings);
-    
-    const summary = [];
+
+    const details = [];
     if (capabilities.width && capabilities.height) {
-      summary.push(`${capabilities.width.min}×${capabilities.height.min} - ${capabilities.width.max}×${capabilities.height.max}`);
+      details.push(
+        `${capabilities.width.min}–${capabilities.width.max} × ` +
+        `${capabilities.height.min}–${capabilities.height.max}`
+      );
     }
     if (capabilities.frameRate) {
-      summary.push(`${capabilities.frameRate.min}-${capabilities.frameRate.max} fps`);
+      details.push(
+        `${capabilities.frameRate.min}–${capabilities.frameRate.max} fps`
+      );
     }
-    cameraInputs.cameraCaps.textContent = summary.join(" • ") || "Capabilities detected";
-    cameraInputs.cameraCaps.classList.remove("loading");
-  } catch (err) {
-    console.error("[Camera] Failed to get capabilities:", err);
-    cameraInputs.cameraCaps.textContent = "Failed to detect capabilities";
-    cameraInputs.cameraCaps.classList.remove("loading");
+
+    cameraInputs.cameraCaps.textContent =
+      details.join(" · ") || "Camera capabilities available.";
+  } catch (error) {
+    console.warn("[Camera] Capability check failed:", error);
     setDefaultCameraOptions();
+    cameraInputs.cameraCaps.textContent =
+      "Using standard camera settings.";
   }
 }
 
-/**
- * Generate common resolutions within camera capabilities
- */
 function populateResolutions(capabilities, currentSettings) {
-  const commonResolutions = [
-    { w: 3840, h: 2160, label: "4K (3840×2160)" },
-    { w: 2560, h: 1440, label: "QHD (2560×1440)" },
-    { w: 1920, h: 1080, label: "1080p (1920×1080)" },
-    { w: 1280, h: 720, label: "720p (1280×720)" },
-    { w: 854, h: 480, label: "480p (854×480)" },
-    { w: 640, h: 480, label: "VGA (640×480)" },
-    { w: 640, h: 360, label: "360p (640×360)" },
-    { w: 320, h: 240, label: "QVGA (320×240)" }
+  const common = [
+    [1920, 1080, "1080p"],
+    [1280, 720, "720p"],
+    [854, 480, "480p"],
+    [640, 480, "VGA"],
+    [640, 360, "360p"],
+    [320, 240, "QVGA"]
   ];
-  
-  cameraInputs.resolutionSelect.innerHTML = "";
-  
+
   const maxW = capabilities.width?.max || 1920;
   const maxH = capabilities.height?.max || 1080;
   const minW = capabilities.width?.min || 320;
   const minH = capabilities.height?.min || 240;
-  
-  const availableResolutions = commonResolutions.filter(
-    res => res.w >= minW && res.w <= maxW && res.h >= minH && res.h <= maxH
+
+  const available = common.filter(([w, h]) =>
+    w >= minW && w <= maxW && h >= minH && h <= maxH
   );
-  
-  const maxIsStandard = availableResolutions.some(r => r.w === maxW && r.h === maxH);
-  if (!maxIsStandard && maxW && maxH) {
-    availableResolutions.unshift({ w: maxW, h: maxH, label: `Max (${maxW}×${maxH})` });
-  }
-  
-  if (availableResolutions.length === 0) {
-    availableResolutions.push({ w: 640, h: 480, label: "VGA (640×480)" });
-  }
-  
-  availableResolutions.forEach(res => {
+
+  if (!available.length) available.push([640, 480, "VGA"]);
+
+  cameraInputs.resolutionSelect.replaceChildren();
+
+  available.forEach(([width, height, label]) => {
     const option = document.createElement("option");
-    option.value = `${res.w}x${res.h}`;
-    option.textContent = res.label;
+    option.value = `${width}x${height}`;
+    option.textContent = `${label} (${width}×${height})`;
     cameraInputs.resolutionSelect.appendChild(option);
   });
-  
-  const currentRes = `${currentSettings.width}x${currentSettings.height}`;
-  const hasCurrentRes = availableResolutions.some(r => `${r.w}x${r.h}` === currentRes);
-  
-  if (hasCurrentRes) {
-    cameraInputs.resolutionSelect.value = currentRes;
+
+  const current = `${currentSettings.width || 0}x${currentSettings.height || 0}`;
+
+  if ([...cameraInputs.resolutionSelect.options].some(option => option.value === current)) {
+    cameraInputs.resolutionSelect.value = current;
   } else {
-    const default720 = availableResolutions.find(r => r.w === 1280 && r.h === 720);
-    if (default720) {
-      cameraInputs.resolutionSelect.value = "1280x720";
-    }
+    cameraInputs.resolutionSelect.value =
+      [...cameraInputs.resolutionSelect.options].find(option => option.value === "1280x720")
+        ?.value || cameraInputs.resolutionSelect.options[0].value;
   }
-  
+
   cameraInputs.resolutionSelect.disabled = false;
 }
 
-/**
- * Generate frame rate options within camera capabilities
- */
 function populateFrameRates(capabilities, currentSettings) {
-  const commonFps = [60, 30, 24, 15, 10];
-  
-  cameraInputs.fpsSelect.innerHTML = "";
-  
-  const maxFps = capabilities.frameRate?.max || 30;
-  const minFps = capabilities.frameRate?.min || 1;
-  
-  const availableFps = commonFps.filter(fps => fps >= minFps && fps <= maxFps);
-  
-  if (!availableFps.includes(Math.floor(maxFps)) && maxFps > 0) {
-    availableFps.unshift(Math.floor(maxFps));
-  }
-  availableFps.sort((a, b) => b - a);
-  
-  if (availableFps.length === 0) {
-    availableFps.push(30);
-  }
-  
-  availableFps.forEach(fps => {
+  const max = capabilities.frameRate?.max || 30;
+  const min = capabilities.frameRate?.min || 1;
+
+  const rates = [60, 30, 24, 15, 10].filter(rate =>
+    rate >= min && rate <= max
+  );
+
+  if (!rates.length) rates.push(Math.floor(max) || 30);
+
+  cameraInputs.fpsSelect.replaceChildren();
+
+  rates.forEach(rate => {
     const option = document.createElement("option");
-    option.value = fps;
-    option.textContent = `${fps} fps`;
+    option.value = String(rate);
+    option.textContent = `${rate} fps`;
     cameraInputs.fpsSelect.appendChild(option);
   });
-  
-  const currentFps = Math.round(currentSettings.frameRate);
-  if (availableFps.includes(currentFps)) {
-    cameraInputs.fpsSelect.value = currentFps;
-  } else if (availableFps.includes(30)) {
-    cameraInputs.fpsSelect.value = 30;
-  }
-  
+
+  const current = String(Math.round(currentSettings.frameRate || 30));
+  cameraInputs.fpsSelect.value =
+    rates.includes(Number(current)) ? current :
+    rates.includes(30) ? "30" :
+    String(rates[0]);
+
   cameraInputs.fpsSelect.disabled = false;
 }
 
-/**
- * Set default camera options when capabilities can't be detected
- */
 function setDefaultCameraOptions() {
   cameraInputs.resolutionSelect.innerHTML = `
-    <option value="1920x1080">1080p (1920×1080)</option>
-    <option value="1280x720" selected>720p (1280×720)</option>
+    <option value="1280x720">720p (1280×720)</option>
     <option value="640x480">VGA (640×480)</option>
   `;
+
   cameraInputs.fpsSelect.innerHTML = `
-    <option value="30" selected>30 fps</option>
+    <option value="30">30 fps</option>
     <option value="24">24 fps</option>
     <option value="15">15 fps</option>
   `;
+
   cameraInputs.resolutionSelect.disabled = false;
   cameraInputs.fpsSelect.disabled = false;
 }
 
-// Workflow specification for object detection demo
-const WORKFLOW_SPEC = {
-  "version": "1.0",
-  "inputs": [
-    {
-      "type": "InferenceImage",
-      "name": "image"
-    }
-  ],
-  "steps": [
-    {
-      "type": "roboflow_core/roboflow_object_detection_model@v2",
-      "name": "model",
-      "images": "$inputs.image",
-      "model_id": "rfdetr-nano"
-    },
-    {
-      "type": "roboflow_core/blur_visualization@v1",
-      "name": "blur_visualization",
-      "image": "$inputs.image",
-      "predictions": "$steps.model.predictions"
-    },
-    {
-      "type": "roboflow_core/bounding_box_visualization@v1",
-      "name": "bounding_box_visualization",
-      "image": "$inputs.image",
-      "predictions": "$steps.model.predictions"
-    },
-    {
-      "type": "roboflow_core/label_visualization@v1",
-      "name": "label_visualization",
-      "image": "$steps.bounding_box_visualization.image",
-      "predictions": "$steps.model.predictions"
-    },
-    {
-      "type": "roboflow_core/property_definition@v1",
-      "name": "property_definition",
-      "data": "$steps.model.predictions",
-      "operations": [
-        { "type": "SequenceLength" }
-      ]
-    }
-  ],
-  "outputs": [
-    {
-      "type": "JsonField",
-      "name": "blur",
-      "coordinates_system": "own",
-      "selector": "$steps.blur_visualization.image"
-    },
-    {
-      "type": "JsonField",
-      "name": "labels",
-      "coordinates_system": "own",
-      "selector": "$steps.label_visualization.image"
-    },
-    {
-      "type": "JsonField",
-      "name": "count",
-      "coordinates_system": "own",
-      "selector": "$steps.property_definition.output"
-    }
-  ]
-};
+/* -------------------- Detection parsing -------------------- */
 
-/**
- * Update status display
- */
-function setStatus(text) {
-  statusEl.textContent = text;
-  console.log("[UI Status]", text);
+function getConfidence(prediction) {
+  const value = Number(
+    prediction.confidence ??
+    prediction.score ??
+    prediction.probability
+  );
+
+  if (!Number.isFinite(value)) return null;
+  return value > 1 ? value / 100 : value;
 }
 
-/**
- * Connect to Roboflow WebRTC streaming using secure proxy
- *
- * @param {Object} options - Connection options
- * @param {Object} [options.workflowSpec] - Workflow specification
- * @param {Function} [options.onData] - Callback for data channel messages
- * @returns {Promise<RFWebRTCConnection>} WebRTC connection object
- */
-async function connectWebcamToRoboflowWebRTC(options = {}) {
-  const { onData } = options;
+function getClassName(prediction) {
+  return prediction.class ??
+    prediction.class_name ??
+    prediction.label ??
+    prediction.name ??
+    prediction.category_name ??
+    null;
+}
+
+function extractPredictions(data) {
+  const found = [];
+  const visited = new Set();
+
+  function walk(value, depth = 0) {
+    if (!value || typeof value !== "object" || depth > 10) return;
+    if (visited.has(value)) return;
+    visited.add(value);
+
+    if (Array.isArray(value)) {
+      value.forEach(item => walk(item, depth + 1));
+      return;
+    }
+
+    const label = getClassName(value);
+    const confidence = getConfidence(value);
+
+    if (label && confidence !== null) {
+      found.push({
+        label: String(label),
+        confidence,
+        raw: value
+      });
+    }
+
+    for (const [key, child] of Object.entries(value)) {
+      if (
+        child && typeof child === "object" &&
+        !["image", "output_image", "visualization"].includes(key)
+      ) {
+        walk(child, depth + 1);
+      }
+    }
+  }
+
+  walk(data);
+
+  const unique = new Map();
+
+  found.forEach(prediction => {
+    const key = [
+      prediction.label,
+      prediction.confidence.toFixed(4),
+      prediction.raw.x ?? "",
+      prediction.raw.y ?? ""
+    ].join(":");
+
+    if (!unique.has(key)) unique.set(key, prediction);
+  });
+
+  return [...unique.values()];
+}
+
+function renderDetections(predictions) {
+  latestPredictions = predictions;
+
+  const visible = predictions
+    .filter(item => item.confidence >= confidenceThreshold)
+    .sort((a, b) => b.confidence - a.confidence);
+
+  detectionListEl.replaceChildren();
+  visibleCountEl.textContent = String(visible.length);
+
+  if (!visible.length) {
+    const empty = document.createElement("p");
+    empty.className = "detection-empty";
+    empty.textContent = predictions.length
+      ? "Detections are below your selected confidence threshold."
+      : "No individual predictions received yet. Check your workflow output.";
+    detectionListEl.appendChild(empty);
+    return;
+  }
+
+  visible.forEach(prediction => {
+    const card = document.createElement("article");
+    card.className = "detection-card";
+
+    const name = document.createElement("span");
+    name.className = "detection-name";
+    name.textContent = prediction.label;
+
+    const confidence = document.createElement("span");
+    confidence.className = "detection-confidence";
+    confidence.textContent = `${Math.round(prediction.confidence * 100)}%`;
+
+    const meter = document.createElement("div");
+    meter.className = "detection-meter";
+
+    const fill = document.createElement("div");
+    fill.className = "detection-meter-fill";
+    fill.style.width = `${Math.round(prediction.confidence * 100)}%`;
+
+    meter.appendChild(fill);
+    card.append(name, confidence, meter);
+    detectionListEl.appendChild(card);
+  });
+}
+
+function recordHistory(predictions) {
+  if (!predictions.length) return;
+
+  const signature = predictions
+    .map(item => `${item.label}:${item.confidence.toFixed(2)}`)
+    .sort()
+    .join("|");
+
+  const now = Date.now();
+
+  if (
+    signature === lastHistorySignature &&
+    now - lastHistoryTime < 1000
+  ) {
+    return;
+  }
+
+  lastHistorySignature = signature;
+  lastHistoryTime = now;
+
+  detectionHistory.unshift({
+    time: new Date().toLocaleTimeString(),
+    items: predictions.map(item => ({
+      label: item.label,
+      confidence: item.confidence
+    }))
+  });
+
+  detectionHistory = detectionHistory.slice(0, 100);
+  renderHistory();
+}
+
+function renderHistory() {
+  historyListEl.replaceChildren();
+
+  historyCountEl.textContent = String(detectionHistory.length);
+
+  if (!detectionHistory.length) {
+    const empty = document.createElement("p");
+    empty.className = "detection-empty";
+    empty.textContent = "No detection events recorded yet.";
+    historyListEl.appendChild(empty);
+    return;
+  }
+
+  detectionHistory.forEach(entry => {
+    const row = document.createElement("article");
+    row.className = "history-entry";
+
+    const time = document.createElement("span");
+    time.textContent = entry.time;
+
+    const items = document.createElement("span");
+    items.textContent = entry.items.map(item =>
+      `${item.label} (${Math.round(item.confidence * 100)}%)`
+    ).join(", ");
+
+    row.append(time, items);
+    historyListEl.appendChild(row);
+  });
+}
+
+/* -------------------- Confidence and appearance -------------------- */
+
+function updateThreshold(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return;
+
+  confidenceThreshold = Math.max(0, Math.min(1, parsed / 100));
+
+  const display = `${Math.round(confidenceThreshold * 100)}%`;
+  thresholdValueEl.textContent = display;
+  currentThresholdEl.textContent = display;
+
+  renderDetections(latestPredictions);
+}
+
+function applyAppearance() {
+  const theme = themeSelectEl.value || "cyan";
+  const layout = layoutSelectEl.value || "standard";
+
+  document.documentElement.dataset.theme = theme;
+  document.documentElement.dataset.layout = layout;
+
+  try {
+    localStorage.setItem("visionLabTheme", theme);
+    localStorage.setItem("visionLabLayout", layout);
+  } catch (error) {
+    console.warn("[Settings] Browser storage unavailable:", error);
+  }
+}
+
+function loadAppearance() {
+  try {
+    themeSelectEl.value = localStorage.getItem("visionLabTheme") || "cyan";
+    layoutSelectEl.value = localStorage.getItem("visionLabLayout") || "standard";
+  } catch {
+    themeSelectEl.value = "cyan";
+    layoutSelectEl.value = "standard";
+  }
+
+  applyAppearance();
+}
+
+function clearHistory() {
+  detectionHistory = [];
+  lastHistorySignature = "";
+  lastHistoryTime = 0;
+  renderHistory();
+}
+
+$("saveSettingsBtn").addEventListener("click", () => {
+  applyAppearance();
+  settingsMessageEl.textContent = "Display preferences saved in this browser.";
+  window.setTimeout(() => {
+    settingsMessageEl.textContent = "";
+  }, 3000);
+});
+
+$("resetHistoryBtn").addEventListener("click", clearHistory);
+$("clearHistoryBtn").addEventListener("click", clearHistory);
+
+thresholdEl.addEventListener("input", () => {
+  updateThreshold(thresholdEl.value);
+});
+
+themeSelectEl.addEventListener("change", applyAppearance);
+layoutSelectEl.addEventListener("change", applyAppearance);
+
+/* -------------------- Secure WebRTC connection -------------------- */
+
+function setStatus(message) {
+  statusEl.textContent = message;
+  console.log("[Status]", message);
+}
+
+async function connectWebcamToRoboflowWebRTC({ onData } = {}) {
   const config = getConfig();
   const cameraConfig = getCameraConfig();
-  
-  console.log("[Config] Workflow:", config);
-  console.log("[Config] Camera:", cameraConfig);
 
-  const connector = connectors.withProxyUrl('/api/init-webrtc', {
-    turnConfigUrl: '/api/turn-config'
+  const connector = connectors.withProxyUrl("/api/init-webrtc", {
+    turnConfigUrl: "/api/turn-config"
   });
+
   const videoConstraints = {
     width: { ideal: cameraConfig.width },
     height: { ideal: cameraConfig.height },
-    frameRate: { ideal: cameraConfig.frameRate, max: cameraConfig.frameRate }
+    frameRate: {
+      ideal: cameraConfig.frameRate,
+      max: cameraConfig.frameRate
+    }
   };
+
   if (cameraConfig.deviceId) {
     videoConstraints.deviceId = { exact: cameraConfig.deviceId };
   } else {
@@ -445,148 +663,156 @@ async function connectWebcamToRoboflowWebRTC(options = {}) {
 
   const wrtcParams = config.mode === "example"
     ? { ...baseParams, workflowSpec: config.workflowSpec }
-    : { ...baseParams, workspaceName: config.workspaceName, workflowId: config.workflowId };
+    : {
+        ...baseParams,
+        workspaceName: config.workspaceName,
+        workflowId: config.workflowId
+      };
 
-  const connection = await webrtc.useStream({
-    source: await streams.useCamera({
-      video: videoConstraints,
-      audio: false
-    }),
-    connector: connector,
-    wrtcParams: wrtcParams,
-    onData: onData,
+  const source = await streams.useCamera({
+    video: videoConstraints,
+    audio: false
+  });
+
+  return webrtc.useStream({
+    source,
+    connector,
+    wrtcParams,
+    onData,
     options: {
       disableInputStreamDownscaling: true
     }
   });
-
-  return connection;
 }
 
-/**
- * Start WebRTC streaming with Roboflow
- */
 async function start() {
-  if (activeConnection) {
-    console.warn("Already connected");
-    return;
-  }
+  if (activeConnection) return;
 
   startBtn.disabled = true;
-  setStatus("Connecting...");
+  setStatus("Connecting…");
 
   try {
     const connection = await connectWebcamToRoboflowWebRTC({
-      onData: (data) => {
-        console.log("[Data]", data);
-        dataMessageCount++;
-        dataCountEl.textContent = dataMessageCount;
+      onData(data) {
+        console.log("[Roboflow data]", data);
+
+        dataMessageCount += 1;
+        dataCountEl.textContent = String(dataMessageCount);
         dataPreviewEl.textContent = JSON.stringify(data, null, 2);
+
+        const predictions = extractPredictions(data);
+        renderDetections(predictions);
+
+        recordHistory(
+          predictions.filter(item => item.confidence >= confidenceThreshold)
+        );
       }
     });
 
     activeConnection = connection;
+
     const remoteStream = await connection.remoteStream();
     videoEl.srcObject = remoteStream;
-    videoEl.controls = false;
+    videoEl.muted = true;
+    videoEl.playsInline = true;
+
     try {
       await videoEl.play();
-      console.log("[UI] Video playing");
-    } catch (err) {
-      console.warn("[UI] Autoplay failed:", err);
+    } catch (error) {
+      console.warn("[Video] Autoplay was blocked:", error);
     }
 
-    setStatus("Connected - Processing video");
+    setStatus("Connected · Processing video");
     stopBtn.disabled = false;
+    placeholderEl.classList.add("hidden");
+    feedEl.classList.add("scanning");
+  } catch (error) {
+    console.error("[Connection] Failed:", error);
 
-    console.log("[UI] Successfully connected!");
+    const message = error?.message || String(error);
+    setStatus(`Error: ${message}`);
 
-  } catch (err) {
-    console.error("[UI] Connection failed:", err);
-    if (err.message.includes('API key')) {
-      setStatus("Error: Server API key not configured");
-      alert("Server configuration error. Please check that ROBOFLOW_API_KEY is set in the .env file.");
-    } else {
-      setStatus(`Error: ${err.message}`);
+    if (/api key/i.test(message)) {
+      alert("The server API key is not configured. Check your backend environment settings.");
     }
 
     startBtn.disabled = false;
+    stopBtn.disabled = true;
     activeConnection = null;
   }
 }
 
-/**
- * Stop video processing and cleanup
- */
 async function stop() {
-  if (!activeConnection) {
-    return;
-  }
+  if (!activeConnection) return;
 
   stopBtn.disabled = true;
-  setStatus("Stopping...");
+  setStatus("Stopping…");
 
   try {
     await activeConnection.cleanup();
-    console.log("[UI] Cleanup complete");
-  } catch (err) {
-    console.error("[UI] Cleanup error:", err);
+  } catch (error) {
+    console.error("[Connection] Cleanup failed:", error);
   } finally {
     activeConnection = null;
     videoEl.srcObject = null;
+    placeholderEl.classList.remove("hidden");
+    feedEl.classList.remove("scanning");
+
     startBtn.disabled = false;
     stopBtn.disabled = true;
-    setStatus("Idle");
+
     dataMessageCount = 0;
     dataCountEl.textContent = "0";
     dataPreviewEl.textContent = "";
+
+    latestPredictions = [];
+    renderDetections([]);
+
+    setStatus("Idle");
   }
 }
 
-// Attach event listeners
+/* -------------------- Event listeners -------------------- */
+
 startBtn.addEventListener("click", start);
 stopBtn.addEventListener("click", stop);
 
-// Tab switching
-tabBtns.forEach(btn => {
-  btn.addEventListener("click", () => {
-    switchTab(btn.dataset.tab);
+tabBtns.forEach(button => {
+  button.addEventListener("click", () => {
+    switchTab(button.dataset.tab);
   });
 });
 
-// Camera selection change handler
-cameraInputs.cameraSelect.addEventListener("change", async (e) => {
-  const deviceId = e.target.value;
-  if (deviceId) {
-    await getCameraCapabilities(deviceId);
-  }
+cameraInputs.cameraSelect.addEventListener("change", async () => {
+  await getCameraCapabilities(cameraInputs.cameraSelect.value);
 });
 
-// Initialize camera enumeration on load
-enumerateCameras();
-
-// Cleanup on page unload
 window.addEventListener("pagehide", () => {
   if (activeConnection) {
     activeConnection.cleanup();
   }
 });
 
-window.addEventListener("beforeunload", () => {
-  if (activeConnection) {
-    activeConnection.cleanup();
-  }
-});
+/* -------------------- Initialization -------------------- */
 
-// Check server health on load
-fetch('/api/health')
-  .then(res => res.json())
+loadAppearance();
+updateThreshold(thresholdEl.value);
+renderHistory();
+setDefaultCameraOptions();
+
+enumerateCameras();
+
+fetch("/api/health")
+  .then(response => {
+    if (!response.ok) throw new Error(`Health check failed: ${response.status}`);
+    return response.json();
+  })
   .then(data => {
-    console.log('[UI] Server health:', data);
+    console.log("[Server health]", data);
     if (!data.apiKeyConfigured) {
-      console.warn('[UI] Warning: Server API key not configured');
+      console.warn("[Server] API key is not configured.");
     }
   })
-  .catch(err => {
-    console.error('[UI] Failed to check server health:', err);
+  .catch(error => {
+    console.warn("[Server] Health check unavailable:", error);
   });
