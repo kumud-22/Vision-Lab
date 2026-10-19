@@ -525,86 +525,109 @@ els.stop.addEventListener("click", stopStream);
 // ============================================================
 
 function isPrediction(value) {
-  return value &&
-    typeof value === "object" &&
-    (typeof value.class === "string" ||
-     typeof value.class_name === "string" ||
-     typeof value.label === "string") &&
-    (typeof value.confidence === "number" ||
-     typeof value.class_confidence === "number");
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const name = value.class ?? value.class_name ?? value.className ?? value.label ?? value.category;
+  return typeof name === "string" && name.trim().length > 0;
 }
 
-function findPredictions(data) {
-  if (!data || typeof data !== "object") return [];
+function findPredictions(data, depth = 0) {
+  if (depth > 8 || data == null) return [];
+
+  if (typeof data === "string") {
+    const trimmed = data.trim();
+    if ((trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+        (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+      try { return findPredictions(JSON.parse(trimmed), depth + 1); }
+      catch { return []; }
+    }
+    return [];
+  }
 
   if (Array.isArray(data)) {
-    return data.filter(isPrediction);
-  }
-
-  if (Array.isArray(data.predictions)) {
-    return data.predictions.filter(isPrediction);
-  }
-
-  // Some workflows return named outputs that contain predictions.
-  for (const value of Object.values(data)) {
-    if (Array.isArray(value) && value.some(isPrediction)) {
-      return value.filter(isPrediction);
-    }
-
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-      const nested = findPredictions(value);
+    const direct = data.filter(isPrediction);
+    if (direct.length) return direct;
+    for (const item of data) {
+      const nested = findPredictions(item, depth + 1);
       if (nested.length) return nested;
     }
+    return [];
+  }
+
+  if (typeof data !== "object") return [];
+
+  // Common direct prediction arrays from object-detection workflows.
+  for (const key of ["predictions", "detections", "objects", "results"]) {
+    if (Array.isArray(data[key])) {
+      const direct = data[key].filter(isPrediction);
+      if (direct.length) return direct;
+      for (const item of data[key]) {
+        const nested = findPredictions(item, depth + 1);
+        if (nested.length) return nested;
+      }
+    }
+  }
+
+  // Search nested workflow outputs, skipping image/display payloads.
+  for (const [key, value] of Object.entries(data)) {
+    if (/^(image|frame|video|canvas|visualization|metadata|time|timestamp)$/i.test(key)) continue;
+    const nested = findPredictions(value, depth + 1);
+    if (nested.length) return nested;
   }
 
   return [];
 }
 
 function predictionName(prediction) {
-  return prediction.class ||
-    prediction.class_name ||
-    prediction.label ||
-    "Unknown object";
+  const value = prediction?.class ?? prediction?.class_name ??
+    prediction?.className ?? prediction?.label ?? prediction?.category;
+  return typeof value === "string" && value.trim() ? value.trim() : "Unknown object";
 }
 
 function confidencePercent(prediction) {
-  const raw = prediction.confidence ?? prediction.class_confidence;
+  const raw = prediction?.confidence ?? prediction?.class_confidence ??
+    prediction?.classConfidence ?? prediction?.score;
+  if (raw === null || raw === undefined || raw === "") return null;
 
-  if (typeof raw !== "number" || !Number.isFinite(raw)) {
-    return null;
-  }
+  const number = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(number)) return null;
 
-  return Math.round(Math.max(0, Math.min(1, raw)) * 100);
+  // Roboflow scores are commonly 0–1, but some output formats use 0–100.
+  const percent = number <= 1 ? number * 100 : number;
+  return Math.round(Math.max(0, Math.min(100, percent)));
 }
 
 function handleInferenceData(data) {
-  console.log("[Inference data]", data);
+  console.log("[VISION LAB] Raw inference data:", data);
 
   const predictions = findPredictions(data);
+  console.log("[VISION LAB] Parsed predictions:", predictions);
+
   lastDetections = predictions;
-
   eventCount++;
-  predictions.forEach(prediction => {
-    sessionClasses.add(predictionName(prediction));
-  });
+  predictions.forEach(prediction => sessionClasses.add(predictionName(prediction)));
 
-  els.totalDetections.textContent = String(eventCount);
-  els.uniqueClasses.textContent = String(sessionClasses.size);
-  els.dashEvents.textContent = String(eventCount);
-  els.dashClasses.textContent = String(sessionClasses.size);
+  if (els.totalDetections) els.totalDetections.textContent = String(eventCount);
+  if (els.uniqueClasses) els.uniqueClasses.textContent = String(sessionClasses.size);
+  if (els.dashEvents) els.dashEvents.textContent = String(eventCount);
+  if (els.dashClasses) els.dashClasses.textContent = String(sessionClasses.size);
 
   renderDetections(predictions);
   renderDashboardRecent();
-  updateHistoryFromPredictions(predictions);
+  if (predictions.length) updateHistoryFromPredictions(predictions);
 }
 
 // ============================================================
 // LIVE DETECTION SIDEBAR
 // ============================================================
+// ============================================================
+// LIVE DETECTION SIDEBAR
+// ============================================================
 
 function renderDetections(predictions) {
-  els.visibleCount.textContent =
-    `${predictions.length} item${predictions.length === 1 ? "" : "s"}`;
+  if (els.visibleCount) {
+    els.visibleCount.textContent =
+      `${predictions.length} item${predictions.length === 1 ? "" : "s"}`;
+  }
 
   if (!predictions.length) {
     els.detectionList.innerHTML =
@@ -683,7 +706,8 @@ function formatTime(iso) {
 }
 
 function renderHistory() {
-  const query = (els.historySearch.value || "").trim().toLowerCase();
+  if (!els.historyList) return;
+  const query = (els.historySearch?.value || "").trim().toLowerCase();
 
   const filtered = history.filter(item =>
     item.name.toLowerCase().includes(query)
@@ -726,7 +750,7 @@ function renderHistory() {
   });
 }
 
-els.historySearch.addEventListener("input", renderHistory);
+els.historySearch?.addEventListener("input", renderHistory);
 
 $("clearHistoryBtn").addEventListener("click", () => {
   if (!confirm("Clear all saved detection history from this browser?")) {
@@ -743,6 +767,7 @@ $("clearHistoryBtn").addEventListener("click", () => {
 // ============================================================
 
 function renderDashboardRecent() {
+  if (!els.dashboardRecent) return;
   const recent = history.slice(0, 6);
   els.dashboardRecent.replaceChildren();
 
