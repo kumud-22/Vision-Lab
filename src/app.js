@@ -136,7 +136,7 @@ function getConfig() {
   const serverConfig = getServerConfig();
 
   if (workflowMode === "example") {
-    const streamOutput = exampleInputs.streamOutput?.value || "labels";
+    const streamOutput = exampleInputs.streamOutput?.value || "output_image";
 
     return {
       mode: "example",
@@ -161,8 +161,8 @@ function getConfig() {
     workflowId,
     imageInputName: configInputs.imageInputName?.value?.trim() || "image",
     streamOutputNames: (
-      configInputs.streamOutputNames?.value?.trim() || "labels"
-    ).split(",").map(value => value.trim()).filter(Boolean),
+  configInputs.streamOutputNames?.value?.trim() || "output_image"
+).split(",").map(value => value.trim()).filter(Boolean),
     dataOutputNames: (
       configInputs.dataOutputNames?.value?.trim() || "predictions"
     ).split(",").map(value => value.trim()).filter(Boolean),
