@@ -1,752 +1,953 @@
 
-/**
- * VISION LAB — Roboflow Secure WebRTC Object Detector
- *
- * Improvements:
- * - No camera access request just to load the page.
- * - Camera is requested only when Start is clicked.
- * - Lower default camera resolution and FPS for faster streaming.
- * - Secure backend proxy keeps the Roboflow API key server-side.
- * - Better connection status, error handling, and cleanup.
- *
- * IMPORTANT:
- * Keep your existing backend and Render environment variables.
- */
-
 import { connectors, webrtc, streams } from "@roboflow/inference-sdk";
 
 // ============================================================
-// 1. DOM ELEMENTS
+// VISION LAB — APPLICATION CONTROLLER
 // ============================================================
 
-const startBtn = document.getElementById("startBtn");
-const stopBtn = document.getElementById("stopBtn");
-const statusEl = document.getElementById("status");
-const videoEl = document.getElementById("video");
-const dataPreviewEl = document.getElementById("dataPreview");
-const dataCountEl = document.getElementById("dataCount");
+const $ = (id) => document.getElementById(id);
 
-const configInputs = {
-  workspaceName: document.getElementById("workspaceName"),
-  workflowId: document.getElementById("workflowId"),
-  imageInputName: document.getElementById("imageInputName"),
-  streamOutputNames: document.getElementById("streamOutputNames"),
-  dataOutputNames: document.getElementById("dataOutputNames")
+const els = {
+  start: $("startBtn"),
+  stop: $("stopBtn"),
+  status: $("status"),
+  video: $("video"),
+  placeholder: $("feedPlaceholder"),
+  feedState: $("feedState"),
+  feedHint: $("feedHint"),
+  feedDot: $("feedDot"),
+  headerDot: $("headerDot"),
+  systemDot: $("systemDot"),
+  systemLabel: $("systemLabel"),
+  detectionList: $("detectionList"),
+  visibleCount: $("visibleCount"),
+  totalDetections: $("totalDetections"),
+  uniqueClasses: $("uniqueClasses"),
+  thresholdMetric: $("thresholdMetric"),
+  threshold: $("confidenceThreshold"),
+  thresholdLabel: $("thresholdLabel"),
+  thresholdHelp: $("thresholdHelp"),
+  inferenceMode: $("inferenceMode"),
+  modelId: $("modelId"),
+  workspace: $("workspaceName"),
+  workflowId: $("workflowId"),
+  imageInput: $("imageInputName"),
+  streamOutputs: $("streamOutputNames"),
+  dataOutputs: $("dataOutputNames"),
+  region: $("requestedRegion"),
+  plan: $("requestedPlan"),
+  timeout: $("processingTimeout"),
+  modelIdField: $("modelIdField"),
+  historyList: $("historyList"),
+  historySearch: $("historySearch"),
+  dashboardRecent: $("dashboardRecent"),
+  dashEvents: $("dashEvents"),
+  dashClasses: $("dashClasses"),
+  dashThreshold: $("dashThreshold"),
+  systemStream: $("systemStream"),
+  backendState: $("backendState"),
+  apiKeyState: $("apiKeyState"),
+  density: $("densitySelect"),
+  boxStyle: $("boxStyleSelect"),
+  showSidebar: $("showSidebar")
 };
 
-const exampleInputs = {
-  streamOutput: document.getElementById("exampleStreamOutput")
+const STORAGE = {
+  settings: "vision-lab-settings-v1",
+  pipeline: "vision-lab-pipeline-v1",
+  history: "vision-lab-history-v1"
 };
 
-const serverInputs = {
-  requestedRegion: document.getElementById("requestedRegion"),
-  requestedPlan: document.getElementById("requestedPlan"),
-  processingTimeout: document.getElementById("processingTimeout")
-};
-
-const cameraInputs = {
-  cameraSelect: document.getElementById("cameraSelect"),
-  resolutionSelect: document.getElementById("resolutionSelect"),
-  fpsSelect: document.getElementById("fpsSelect"),
-  cameraCaps: document.getElementById("cameraCaps")
-};
-
-const tabBtns = document.querySelectorAll(".tab-btn");
-const tabContents = document.querySelectorAll(".tab-content");
+let connection = null;
+let starting = false;
+let stopping = false;
+let reconnecting = false;
+let eventCount = 0;
+let lastDetections = [];
+let sessionClasses = new Set();
+let history = loadJSON(STORAGE.history, []);
+let lastHealth = null;
 
 // ============================================================
-// 2. STATE
+// SAFE LOCAL STORAGE
 // ============================================================
 
-let workflowMode = "example";
-let activeConnection = null;
-let dataMessageCount = 0;
-let isStarting = false;
-let isStopping = false;
-
-// ============================================================
-// 3. STATUS AND UI HELPERS
-// ============================================================
-
-function setStatus(message) {
-  if (statusEl) {
-    statusEl.textContent = message;
-  }
-
-  console.log("[VISION LAB]", message);
-}
-
-function setButtons({ starting = false, connected = false } = {}) {
-  if (startBtn) {
-    startBtn.disabled = starting || connected;
-  }
-
-  if (stopBtn) {
-    stopBtn.disabled = !connected;
-  }
-}
-
-function resetDataDisplay() {
-  dataMessageCount = 0;
-
-  if (dataCountEl) {
-    dataCountEl.textContent = "0";
-  }
-
-  if (dataPreviewEl) {
-    dataPreviewEl.textContent = "";
+function loadJSON(key, fallback) {
+  try {
+    const value = localStorage.getItem(key);
+    return value ? JSON.parse(value) : fallback;
+  } catch {
+    return fallback;
   }
 }
 
-function showError(message) {
-  console.error("[VISION LAB] Error:", message);
-  setStatus(`Error: ${message}`);
+function saveJSON(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.warn("[Storage] Could not save:", error);
+  }
 }
 
 // ============================================================
-// 4. SERVER CONFIGURATION
+// STATUS
 // ============================================================
 
-function getServerConfig() {
+function setStatus(message, state = "idle") {
+  els.status.textContent = message;
+  els.systemLabel.textContent =
+    state === "live" ? "Inference active" :
+    state === "connecting" ? "Connecting" :
+    state === "error" ? "Check system" : "System ready";
+
+  const colors = {
+    live: "var(--green)",
+    connecting: "var(--accent)",
+    error: "var(--danger)",
+    idle: "#71809a"
+  };
+
+  const color = colors[state] || colors.idle;
+
+  [els.headerDot, els.systemDot, els.feedDot].forEach(dot => {
+    if (!dot) return;
+    dot.style.background = color;
+    dot.style.boxShadow =
+      state === "live" ? "0 0 12px var(--green)" : "none";
+  });
+
+  els.feedState.textContent =
+    state === "live" ? "LIVE" :
+    state === "connecting" ? "CONNECTING" :
+    state === "error" ? "ERROR" : "STANDBY";
+
+  if (els.systemStream) {
+    els.systemStream.textContent =
+      state === "live" ? "Live" :
+      state === "connecting" ? "Connecting" :
+      state === "error" ? "Error" : "Idle";
+  }
+}
+
+function setButtonState() {
+  els.start.disabled = starting || Boolean(connection);
+  els.stop.disabled = !connection || stopping;
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+
+const viewTitles = {
+  vision: "Live Vision",
+  dashboard: "Dashboard",
+  history: "Reading History",
+  pipeline: "Inference Pipeline",
+  settings: "Settings",
+  system: "System Status"
+};
+
+function showView(name) {
+  if (!viewTitles[name]) return;
+
+  document.querySelectorAll(".view").forEach(view => {
+    view.classList.toggle("active", view.id === `view-${name}`);
+  });
+
+  document.querySelectorAll(".nav-btn").forEach(button => {
+    button.classList.toggle("active", button.dataset.view === name);
+  });
+
+  $("pageTitle").textContent = viewTitles[name];
+}
+
+document.querySelectorAll(".nav-btn").forEach(button => {
+  button.addEventListener("click", () => showView(button.dataset.view));
+});
+
+document.querySelectorAll("[data-go]").forEach(button => {
+  button.addEventListener("click", () => showView(button.dataset.go));
+});
+
+$("openPipelineBtn").addEventListener("click", () => showView("pipeline"));
+$("openSettingsBtn").addEventListener("click", () => showView("settings"));
+
+// ============================================================
+// PIPELINE CONFIGURATION
+// ============================================================
+
+function readPipeline() {
   return {
-    requestedRegion: serverInputs.requestedRegion?.value || "us",
-    requestedPlan:
-      serverInputs.requestedPlan?.value || "webrtc-gpu-small",
+    mode: els.inferenceMode.value,
+    modelId: els.modelId.value.trim(),
+    workspaceName: els.workspace.value.trim(),
+    workflowId: els.workflowId.value.trim(),
+    imageInputName: els.imageInput.value.trim() || "image",
+    streamOutputNames: (els.streamOutputs.value || "output_image")
+      .split(",").map(s => s.trim()).filter(Boolean),
+    dataOutputNames: (els.dataOutputs.value || "predictions")
+      .split(",").map(s => s.trim()).filter(Boolean),
+    requestedRegion: els.region.value || "us",
+    requestedPlan: els.plan.value || "webrtc-gpu-small",
     processingTimeout:
-      Number.parseInt(serverInputs.processingTimeout?.value, 10) || 600
+      Number.parseInt(els.timeout.value, 10) || 600,
+    confidence: Number(els.threshold.value) / 100
   };
 }
 
-// ============================================================
-// 5. WORKFLOW CONFIGURATION
-// ============================================================
-
-function getConfig() {
-  const serverConfig = getServerConfig();
-
-  if (workflowMode === "example") {
-    const streamOutput =
-      exampleInputs.streamOutput?.value || "labels";
-
-    return {
-      mode: "example",
-      workflowSpec: WORKFLOW_SPEC,
-      imageInputName: "image",
-      streamOutputNames: [streamOutput],
-      dataOutputNames: ["count"],
-      ...serverConfig
-    };
-  }
-
-  const workspaceName =
-    configInputs.workspaceName?.value?.trim();
-
-  const workflowId =
-    configInputs.workflowId?.value?.trim();
-
-  if (!workspaceName || !workflowId) {
-    throw new Error(
-      "Open the Custom tab and enter your Roboflow workspace and workflow ID."
-    );
-  }
-
-  return {
-    mode: "custom",
-    workspaceName,
-    workflowId,
-
-    imageInputName:
-      configInputs.imageInputName?.value?.trim() || "image",
-
-    streamOutputNames: (
-      configInputs.streamOutputNames?.value?.trim() ||
-      "output_image"
-    )
-      .split(",")
-      .map(value => value.trim())
-      .filter(Boolean),
-
-    dataOutputNames: (
-      configInputs.dataOutputNames?.value?.trim() ||
-      "predictions"
-    )
-      .split(",")
-      .map(value => value.trim())
-      .filter(Boolean),
-
-    ...serverConfig
-  };
+function savePipeline() {
+  saveJSON(STORAGE.pipeline, readPipeline());
+  updateThresholdDisplay();
+  updateModeHelp();
+  setStatus("Pipeline configuration saved in this browser.");
 }
 
-// ============================================================
-// 6. TAB SWITCHING
-// ============================================================
+function restorePipeline() {
+  const config = loadJSON(STORAGE.pipeline, null);
+  if (!config) return;
 
-function switchTab(tabName) {
-  if (tabName !== "example" && tabName !== "custom") {
-    return;
+  if (config.mode) els.inferenceMode.value = config.mode;
+  if (config.modelId) els.modelId.value = config.modelId;
+  if (config.workspaceName) els.workspace.value = config.workspaceName;
+  if (config.workflowId) els.workflowId.value = config.workflowId;
+  if (config.imageInputName) els.imageInput.value = config.imageInputName;
+  if (config.streamOutputNames?.length) {
+    els.streamOutputs.value = config.streamOutputNames.join(",");
   }
-
-  workflowMode = tabName;
-
-  tabBtns.forEach(button => {
-    button.classList.toggle(
-      "active",
-      button.dataset.tab === tabName
-    );
-  });
-
-  tabContents.forEach(content => {
-    content.classList.toggle(
-      "active",
-      content.id === `tab-${tabName}`
-    );
-  });
-
-  console.log("[Workflow] Selected mode:", tabName);
+  if (config.dataOutputNames?.length) {
+    els.dataOutputs.value = config.dataOutputNames.join(",");
+  }
+  if (config.requestedRegion) els.region.value = config.requestedRegion;
+  if (config.requestedPlan) els.plan.value = config.requestedPlan;
+  if (config.processingTimeout) {
+    els.timeout.value = config.processingTimeout;
+  }
+  if (Number.isFinite(config.confidence)) {
+    els.threshold.value = String(Math.round(config.confidence * 100));
+  }
 }
 
-tabBtns.forEach(button => {
-  button.addEventListener("click", () => {
-    switchTab(button.dataset.tab);
-  });
+function updateThresholdDisplay() {
+  const percent = `${els.threshold.value}%`;
+  els.thresholdLabel.textContent = percent;
+  els.thresholdMetric.textContent = percent;
+  els.dashThreshold.textContent = percent;
+}
+
+function updateModeHelp() {
+  const dynamic = els.inferenceMode.value === "dynamic";
+
+  els.modelIdField.classList.toggle("hidden", !dynamic);
+
+  els.thresholdHelp.textContent = dynamic
+    ? "Applied inside the model block in the generated workflow. Apply changes to restart the stream with the new threshold."
+    : "Saved Workflow mode uses the confidence settings saved in Roboflow. This slider cannot change that workflow's actual threshold.";
+}
+
+els.inferenceMode.addEventListener("change", updateModeHelp);
+els.threshold.addEventListener("input", updateThresholdDisplay);
+
+$("savePipelineBtn").addEventListener("click", savePipeline);
+
+$("applyPipelineBtn").addEventListener("click", async () => {
+  savePipeline();
+
+  if (connection) {
+    reconnecting = true;
+    await stopStream();
+    reconnecting = false;
+    await startStream();
+  } else {
+    setStatus("Configuration saved. Start the stream to apply it.");
+  }
 });
 
 // ============================================================
-// 7. CAMERA SETTINGS
+// REAL SERVER-SIDE CONFIDENCE THRESHOLD
 // ============================================================
 
-function getCameraConfig() {
-  const resolution =
-    cameraInputs.resolutionSelect?.value?.split("x") || [];
-
-  const width = Number.parseInt(resolution[0], 10) || 640;
-  const height = Number.parseInt(resolution[1], 10) || 480;
-  const frameRate =
-    Number.parseInt(cameraInputs.fpsSelect?.value, 10) || 15;
+/**
+ * Dynamic Model mode creates a workflow whose model block receives
+ * the threshold selected in the dashboard.
+ *
+ * The threshold is sent as workflow configuration to the inference
+ * backend. It is not applied as a frontend-only display filter.
+ */
+function buildDynamicWorkflow(modelId, confidence) {
+  if (!modelId) {
+    throw new Error(
+      "Enter your exact trained Roboflow model ID in Pipeline settings."
+    );
+  }
 
   return {
-    deviceId: cameraInputs.cameraSelect?.value || undefined,
-    width,
-    height,
-    frameRate
+    version: "1.0",
+
+    inputs: [
+      {
+        type: "InferenceImage",
+        name: "image"
+      }
+    ],
+
+    steps: [
+      {
+        type: "roboflow_core/roboflow_object_detection_model@v2",
+        name: "model",
+        images: "$inputs.image",
+        model_id: modelId,
+        confidence_mode: "custom",
+        custom_confidence: confidence
+      },
+      {
+        type: "roboflow_core/bounding_box_visualization@v1",
+        name: "bounding_box_visualization",
+        image: "$inputs.image",
+        predictions: "$steps.model.predictions"
+      },
+      {
+        type: "roboflow_core/label_visualization@v1",
+        name: "label_visualization",
+        image: "$steps.bounding_box_visualization.image",
+        predictions: "$steps.model.predictions"
+      }
+    ],
+
+    outputs: [
+      {
+        type: "JsonField",
+        name: "output_image",
+        coordinates_system: "own",
+        selector: "$steps.label_visualization.image"
+      },
+      {
+        type: "JsonField",
+        name: "predictions",
+        coordinates_system: "own",
+        selector: "$steps.model.predictions"
+      }
+    ]
   };
 }
 
-/**
- * Set performance-friendly defaults.
- * This function does not open the camera.
- */
-function setDefaultCameraOptions() {
-  if (cameraInputs.resolutionSelect) {
-    cameraInputs.resolutionSelect.innerHTML = `
-      <option value="640x480" selected>VGA (640×480)</option>
-      <option value="1280x720">720p (1280×720)</option>
-      <option value="1920x1080">1080p (1920×1080)</option>
-    `;
+// ============================================================
+// CAMERA AND ROBoflow WEBRTC
+// ============================================================
 
-    cameraInputs.resolutionSelect.value = "640x480";
-    cameraInputs.resolutionSelect.disabled = false;
+function getCameraConfig() {
+  const resolution = $("resolutionSelect")?.value?.split("x") || [];
+
+  return {
+    deviceId: $("cameraSelect")?.value || undefined,
+    width: Number.parseInt(resolution[0], 10) || 640,
+    height: Number.parseInt(resolution[1], 10) || 480,
+    frameRate: Number.parseInt($("fpsSelect")?.value, 10) || 15
+  };
+}
+
+async function connectToRoboflow() {
+  const config = readPipeline();
+  const camera = getCameraConfig();
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error(
+      "Camera access is unavailable. Open the site over HTTPS."
+    );
   }
 
-  if (cameraInputs.fpsSelect) {
-    cameraInputs.fpsSelect.innerHTML = `
-      <option value="15" selected>15 fps</option>
-      <option value="24">24 fps</option>
-      <option value="30">30 fps</option>
-    `;
+  let wrtcParams;
 
-    cameraInputs.fpsSelect.value = "15";
-    cameraInputs.fpsSelect.disabled = false;
+  if (config.mode === "dynamic") {
+    const workflowSpec = buildDynamicWorkflow(
+      config.modelId,
+      config.confidence
+    );
+
+    wrtcParams = {
+      workflowSpec,
+      imageInputName: "image",
+      streamOutputNames: ["output_image"],
+      dataOutputNames: ["predictions"],
+      requestedRegion: config.requestedRegion,
+      requestedPlan: config.requestedPlan,
+      processingTimeout: config.processingTimeout
+    };
+  } else {
+    if (!config.workspaceName || !config.workflowId) {
+      throw new Error(
+        "Enter both workspace name and saved workflow ID."
+      );
+    }
+
+    wrtcParams = {
+      workspaceName: config.workspaceName,
+      workflowId: config.workflowId,
+      imageInputName: config.imageInputName,
+      streamOutputNames: config.streamOutputNames,
+      dataOutputNames: config.dataOutputNames,
+      requestedRegion: config.requestedRegion,
+      requestedPlan: config.requestedPlan,
+      processingTimeout: config.processingTimeout
+    };
+  }
+
+  const videoConstraints = {
+    width: { ideal: camera.width },
+    height: { ideal: camera.height },
+    frameRate: { ideal: camera.frameRate, max: camera.frameRate }
+  };
+
+  if (camera.deviceId) {
+    videoConstraints.deviceId = { exact: camera.deviceId };
+  }
+
+  const connector = connectors.withProxyUrl(
+    "/api/init-webrtc",
+    { turnConfigUrl: "/api/turn-config" }
+  );
+
+  const source = await streams.useCamera({
+    video: videoConstraints,
+    audio: false
+  });
+
+  try {
+    return await webrtc.useStream({
+      source,
+      connector,
+      wrtcParams,
+      onData: handleInferenceData,
+      options: {
+        disableInputStreamDownscaling: false
+      }
+    });
+  } catch (error) {
+    source.getTracks?.().forEach(track => track.stop());
+    throw error;
   }
 }
 
-/**
- * List available cameras without opening a camera stream.
- */
-async function enumerateCameras() {
-  const cameraSelect = cameraInputs.cameraSelect;
+// ============================================================
+// START AND STOP
+// ============================================================
 
-  setDefaultCameraOptions();
+async function startStream() {
+  if (starting || connection) return;
 
-  if (!cameraSelect) {
-    return;
-  }
-
-  if (!navigator.mediaDevices?.enumerateDevices) {
-    cameraSelect.innerHTML =
-      '<option value="">Camera access unavailable</option>';
-
-    if (cameraInputs.cameraCaps) {
-      cameraInputs.cameraCaps.textContent =
-        "Use a supported browser over HTTPS.";
-    }
-
-    return;
-  }
+  starting = true;
+  setButtonState();
+  setStatus("Connecting camera and inference workflow...", "connecting");
+  els.feedHint.textContent = "Waiting for camera and Roboflow connection...";
+  els.placeholder.classList.remove("hidden");
 
   try {
-    const devices =
-      await navigator.mediaDevices.enumerateDevices();
+    const newConnection = await connectToRoboflow();
+    connection = newConnection;
 
-    const cameras = devices.filter(
-      device => device.kind === "videoinput"
+    const remoteStream = await newConnection.remoteStream();
+
+    if (!remoteStream) {
+      throw new Error("Roboflow did not return a processed video stream.");
+    }
+
+    els.video.srcObject = remoteStream;
+    els.video.muted = true;
+    els.video.autoplay = true;
+    els.video.playsInline = true;
+
+    try {
+      await els.video.play();
+    } catch (error) {
+      console.warn("[Video] Autoplay could not start:", error);
+    }
+
+    els.placeholder.classList.add("hidden");
+    els.feedHint.textContent = "Live processed video from Roboflow.";
+    setStatus("Live — inference is running.", "live");
+    els.feedState.textContent = "LIVE";
+
+  } catch (error) {
+    console.error("[VISION LAB] Start failed:", error);
+
+    if (connection) {
+      try { await connection.cleanup(); } catch {}
+      connection = null;
+    }
+
+    els.video.srcObject = null;
+    els.placeholder.classList.remove("hidden");
+
+    setStatus(`Connection failed: ${error.message || "Unknown error"}`, "error");
+    els.feedHint.textContent =
+      "Check camera permissions, model/workflow settings and Render logs.";
+  } finally {
+    starting = false;
+    setButtonState();
+  }
+}
+
+async function stopStream() {
+  if (!connection || stopping) return;
+
+  stopping = true;
+  const current = connection;
+  connection = null;
+  setButtonState();
+  setStatus("Stopping stream...");
+
+  try {
+    await current.cleanup();
+  } catch (error) {
+    console.warn("[VISION LAB] Cleanup:", error);
+  }
+
+  if (els.video.srcObject) {
+    els.video.pause();
+    els.video.srcObject = null;
+  }
+
+  els.placeholder.classList.remove("hidden");
+  els.feedHint.textContent = "Camera is not connected.";
+
+  stopping = false;
+  setButtonState();
+
+  if (!reconnecting) {
+    setStatus("Idle");
+  }
+}
+
+els.start.addEventListener("click", startStream);
+els.stop.addEventListener("click", stopStream);
+
+// ============================================================
+// NORMALIZE INFERENCE RESULTS
+// ============================================================
+
+function isPrediction(value) {
+  return value &&
+    typeof value === "object" &&
+    (typeof value.class === "string" ||
+     typeof value.class_name === "string" ||
+     typeof value.label === "string") &&
+    (typeof value.confidence === "number" ||
+     typeof value.class_confidence === "number");
+}
+
+function findPredictions(data) {
+  if (!data || typeof data !== "object") return [];
+
+  if (Array.isArray(data)) {
+    return data.filter(isPrediction);
+  }
+
+  if (Array.isArray(data.predictions)) {
+    return data.predictions.filter(isPrediction);
+  }
+
+  // Some workflows return named outputs that contain predictions.
+  for (const value of Object.values(data)) {
+    if (Array.isArray(value) && value.some(isPrediction)) {
+      return value.filter(isPrediction);
+    }
+
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const nested = findPredictions(value);
+      if (nested.length) return nested;
+    }
+  }
+
+  return [];
+}
+
+function predictionName(prediction) {
+  return prediction.class ||
+    prediction.class_name ||
+    prediction.label ||
+    "Unknown object";
+}
+
+function confidencePercent(prediction) {
+  const raw = prediction.confidence ?? prediction.class_confidence;
+
+  if (typeof raw !== "number" || !Number.isFinite(raw)) {
+    return null;
+  }
+
+  return Math.round(Math.max(0, Math.min(1, raw)) * 100);
+}
+
+function handleInferenceData(data) {
+  console.log("[Inference data]", data);
+
+  const predictions = findPredictions(data);
+  lastDetections = predictions;
+
+  eventCount++;
+  predictions.forEach(prediction => {
+    sessionClasses.add(predictionName(prediction));
+  });
+
+  els.totalDetections.textContent = String(eventCount);
+  els.uniqueClasses.textContent = String(sessionClasses.size);
+  els.dashEvents.textContent = String(eventCount);
+  els.dashClasses.textContent = String(sessionClasses.size);
+
+  renderDetections(predictions);
+  renderDashboardRecent();
+  updateHistoryFromPredictions(predictions);
+}
+
+// ============================================================
+// LIVE DETECTION SIDEBAR
+// ============================================================
+
+function renderDetections(predictions) {
+  els.visibleCount.textContent =
+    `${predictions.length} item${predictions.length === 1 ? "" : "s"}`;
+
+  if (!predictions.length) {
+    els.detectionList.innerHTML =
+      '<div class="empty-state">No objects returned for this frame.<br/>Try improving lighting or lowering the pipeline threshold.</div>';
+    return;
+  }
+
+  els.detectionList.replaceChildren();
+
+  predictions.forEach(prediction => {
+    const name = predictionName(prediction);
+    const confidence = confidencePercent(prediction);
+
+    const item = document.createElement("div");
+    item.className = "detection-item";
+
+    const top = document.createElement("div");
+    top.className = "detection-top";
+
+    const label = document.createElement("span");
+    label.className = "detection-name";
+    label.textContent = name;
+
+    const score = document.createElement("span");
+    score.className = "confidence";
+    score.textContent =
+      confidence === null ? "Score unavailable" : `${confidence}%`;
+
+    top.append(label, score);
+    item.appendChild(top);
+
+    if (confidence !== null) {
+      const meter = document.createElement("div");
+      meter.className = "meter";
+
+      const bar = document.createElement("span");
+      bar.style.width = `${confidence}%`;
+
+      meter.appendChild(bar);
+      item.appendChild(meter);
+    }
+
+    els.detectionList.appendChild(item);
+  });
+}
+
+// ============================================================
+// READING HISTORY
+// ============================================================
+
+function updateHistoryFromPredictions(predictions) {
+  if (!predictions.length) return;
+
+  const now = new Date().toISOString();
+
+  predictions.forEach(prediction => {
+    history.unshift({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      time: now,
+      name: predictionName(prediction),
+      confidence: confidencePercent(prediction)
+    });
+  });
+
+  // Keep browser storage bounded.
+  history = history.slice(0, 500);
+  saveJSON(STORAGE.history, history);
+  renderHistory();
+}
+
+function formatTime(iso) {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime())
+    ? "Unknown time"
+    : date.toLocaleString();
+}
+
+function renderHistory() {
+  const query = (els.historySearch.value || "").trim().toLowerCase();
+
+  const filtered = history.filter(item =>
+    item.name.toLowerCase().includes(query)
+  );
+
+  els.historyList.replaceChildren();
+
+  if (!filtered.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = history.length
+      ? "No history matches your search."
+      : "No detections have been recorded yet.";
+    els.historyList.appendChild(empty);
+    return;
+  }
+
+  filtered.forEach(item => {
+    const row = document.createElement("div");
+    row.className = "history-row";
+
+    const left = document.createElement("div");
+    const title = document.createElement("div");
+    title.className = "history-title";
+    title.textContent = item.name;
+
+    const meta = document.createElement("div");
+    meta.className = "history-meta";
+    meta.textContent = formatTime(item.time);
+
+    left.append(title, meta);
+
+    const score = document.createElement("div");
+    score.className = "history-confidence";
+    score.textContent =
+      item.confidence === null ? "N/A" : `${item.confidence}%`;
+
+    row.append(left, score);
+    els.historyList.appendChild(row);
+  });
+}
+
+els.historySearch.addEventListener("input", renderHistory);
+
+$("clearHistoryBtn").addEventListener("click", () => {
+  if (!confirm("Clear all saved detection history from this browser?")) {
+    return;
+  }
+
+  history = [];
+  saveJSON(STORAGE.history, history);
+  renderHistory();
+});
+
+// ============================================================
+// DASHBOARD SUMMARY
+// ============================================================
+
+function renderDashboardRecent() {
+  const recent = history.slice(0, 6);
+  els.dashboardRecent.replaceChildren();
+
+  if (!recent.length) {
+    els.dashboardRecent.textContent =
+      "No detection events recorded yet.";
+    return;
+  }
+
+  recent.forEach(item => {
+    const row = document.createElement("div");
+    row.className = "history-row";
+
+    const left = document.createElement("div");
+    const title = document.createElement("div");
+    title.className = "history-title";
+    title.textContent = item.name;
+
+    const meta = document.createElement("div");
+    meta.className = "history-meta";
+    meta.textContent = formatTime(item.time);
+
+    left.append(title, meta);
+
+    const score = document.createElement("div");
+    score.className = "history-confidence";
+    score.textContent =
+      item.confidence === null ? "N/A" : `${item.confidence}%`;
+
+    row.append(left, score);
+    els.dashboardRecent.appendChild(row);
+  });
+}
+
+// ============================================================
+// THEME AND DISPLAY SETTINGS
+// ============================================================
+
+const themes = {
+  cyan:   { accent: "#42e8ff", rgb: "66,232,255" },
+  purple: { accent: "#b78cff", rgb: "183,140,255" },
+  emerald:{ accent: "#3ee6b0", rgb: "62,230,176" },
+  red:    { accent: "#ff718c", rgb: "255,113,140" },
+  amber:  { accent: "#ffca70", rgb: "255,202,112" }
+};
+
+function applyTheme(name) {
+  const theme = themes[name] || themes.cyan;
+
+  document.documentElement.style.setProperty("--accent", theme.accent);
+  document.documentElement.style.setProperty("--accent-rgb", theme.rgb);
+
+  document.querySelectorAll(".theme-btn").forEach(button => {
+    button.classList.toggle("active", button.dataset.theme === name);
+  });
+
+  const settings = loadJSON(STORAGE.settings, {});
+  settings.theme = name;
+  saveJSON(STORAGE.settings, settings);
+}
+
+document.querySelectorAll(".theme-btn").forEach(button => {
+  button.addEventListener("click", () => applyTheme(button.dataset.theme));
+});
+
+function saveSettings() {
+  const settings = {
+    ...loadJSON(STORAGE.settings, {}),
+    theme:
+      document.querySelector(".theme-btn.active")?.dataset.theme || "cyan",
+    density: els.density.value,
+    boxStyle: els.boxStyle.value,
+    showSidebar: els.showSidebar.checked
+  };
+
+  saveJSON(STORAGE.settings, settings);
+  applyDisplaySettings(settings);
+  setStatus("Appearance settings saved.");
+}
+
+function applyDisplaySettings(settings) {
+  document.body.classList.toggle(
+    "compact",
+    settings.density === "compact"
+  );
+
+  // Compact mode reduces spacing without affecting the camera stream.
+  document.documentElement.style.setProperty(
+    "--radius",
+    settings.density === "compact" ? "10px" : "16px"
+  );
+
+  const sidebarPanel = els.detectionList.closest("aside");
+  if (sidebarPanel) {
+    sidebarPanel.classList.toggle(
+      "hidden",
+      settings.showSidebar === false
     );
+  }
 
-    cameraSelect.innerHTML = "";
+  els.density.value = settings.density || "comfortable";
+  els.boxStyle.value = settings.boxStyle || "normal";
+  els.showSidebar.checked = settings.showSidebar !== false;
+}
 
-    if (cameras.length === 0) {
-      cameraSelect.innerHTML =
-        '<option value="">Default camera</option>';
+$("saveSettingsBtn").addEventListener("click", saveSettings);
 
-      if (cameraInputs.cameraCaps) {
-        cameraInputs.cameraCaps.textContent =
-          "No camera listed yet. Click Start and allow camera access.";
-      }
+function restoreSettings() {
+  const settings = loadJSON(STORAGE.settings, {});
 
+  applyTheme(settings.theme || "cyan");
+  applyDisplaySettings(settings);
+}
+
+// ============================================================
+// BACKEND HEALTH — NO SECRET VALUES ARE DISPLAYED
+// ============================================================
+
+async function checkBackendHealth() {
+  els.backendState.textContent = "Checking";
+  els.apiKeyState.textContent = "Checking";
+
+  try {
+    const response = await fetch("/api/health", {
+      cache: "no-store"
+    });
+
+    if (!response.ok) {
+      throw new Error(`Health endpoint returned HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    lastHealth = data;
+
+    els.backendState.textContent = "Online";
+    els.apiKeyState.textContent =
+      data.apiKeyConfigured === true ? "Configured" :
+      data.apiKeyConfigured === false ? "Missing" : "Unknown";
+
+    console.log("[Backend health]", {
+      online: true,
+      apiKeyConfigured: data.apiKeyConfigured
+    });
+  } catch (error) {
+    lastHealth = null;
+    els.backendState.textContent = "Unavailable";
+    els.apiKeyState.textContent = "Not verified";
+    console.warn("[Backend health]", error);
+  }
+}
+
+$("healthCheckBtn").addEventListener("click", checkBackendHealth);
+
+// ============================================================
+// CAMERA SETTINGS — OPTIONAL CONTROLS IN THE PAGE
+// ============================================================
+
+async function initializeCameraList() {
+  const select = $("cameraSelect");
+  if (!select || !navigator.mediaDevices?.enumerateDevices) return;
+
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cameras = devices.filter(device => device.kind === "videoinput");
+
+    select.replaceChildren();
+
+    if (!cameras.length) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "Default camera";
+      select.appendChild(option);
       return;
     }
 
     cameras.forEach((camera, index) => {
       const option = document.createElement("option");
-
       option.value = camera.deviceId;
-      option.textContent =
-        camera.label || `Camera ${index + 1}`;
-
-      cameraSelect.appendChild(option);
+      option.textContent = camera.label || `Camera ${index + 1}`;
+      select.appendChild(option);
     });
-
-    cameraSelect.disabled = false;
-
-    if (cameraInputs.cameraCaps) {
-      cameraInputs.cameraCaps.textContent =
-        "Camera list loaded. Camera access begins when you click Start.";
-    }
-
-    console.log("[Camera] Available cameras:", cameras);
   } catch (error) {
-    console.warn("[Camera] Could not list cameras:", error);
-
-    cameraSelect.innerHTML =
-      '<option value="">Use default camera</option>';
-
-    if (cameraInputs.cameraCaps) {
-      cameraInputs.cameraCaps.textContent =
-        "The browser will try the default camera.";
-    }
+    console.warn("[Camera list]", error);
   }
 }
 
-// Selecting a camera no longer opens it just to inspect capabilities.
-cameraInputs.cameraSelect?.addEventListener("change", () => {
-  if (cameraInputs.cameraCaps) {
-    cameraInputs.cameraCaps.textContent =
-      "Selected camera. It will open when you click Start.";
+// ============================================================
+// INITIALIZATION
+// ============================================================
+
+restorePipeline();
+restoreSettings();
+updateThresholdDisplay();
+updateModeHelp();
+renderHistory();
+renderDashboardRecent();
+setButtonState();
+setStatus("Ready — click Start.");
+checkBackendHealth();
+initializeCameraList();
+
+window.addEventListener("pagehide", () => {
+  if (connection) {
+    connection.cleanup().catch(error => {
+      console.warn("[Page cleanup]", error);
+    });
   }
 });
-
-// ============================================================
-// 8. EXAMPLE WORKFLOW
-// ============================================================
-
-const WORKFLOW_SPEC = {
-  version: "1.0",
-
-  inputs: [
-    {
-      type: "InferenceImage",
-      name: "image"
-    }
-  ],
-
-  steps: [
-    {
-      type: "roboflow_core/roboflow_object_detection_model@v2",
-      name: "model",
-      images: "$inputs.image",
-      model_id: "rfdetr-nano"
-    },
-    {
-      type: "roboflow_core/blur_visualization@v1",
-      name: "blur_visualization",
-      image: "$inputs.image",
-      predictions: "$steps.model.predictions"
-    },
-    {
-      type: "roboflow_core/bounding_box_visualization@v1",
-      name: "bounding_box_visualization",
-      image: "$inputs.image",
-      predictions: "$steps.model.predictions"
-    },
-    {
-      type: "roboflow_core/label_visualization@v1",
-      name: "label_visualization",
-      image: "$steps.bounding_box_visualization.image",
-      predictions: "$steps.model.predictions"
-    },
-    {
-      type: "roboflow_core/property_definition@v1",
-      name: "property_definition",
-      data: "$steps.model.predictions",
-      operations: [
-        {
-          type: "SequenceLength"
-        }
-      ]
-    }
-  ],
-
-  outputs: [
-    {
-      type: "JsonField",
-      name: "blur",
-      coordinates_system: "own",
-      selector: "$steps.blur_visualization.image"
-    },
-    {
-      type: "JsonField",
-      name: "labels",
-      coordinates_system: "own",
-      selector: "$steps.label_visualization.image"
-    },
-    {
-      type: "JsonField",
-      name: "count",
-      coordinates_system: "own",
-      selector: "$steps.property_definition.output"
-    }
-  ]
-};
-
-// ============================================================
-// 9. SECURE ROBoflow WEBRTC CONNECTION
-// ============================================================
-
-async function connectWebcamToRoboflowWebRTC() {
-  const config = getConfig();
-  const cameraConfig = getCameraConfig();
-
-  console.log("[Config] Workflow mode:", config.mode);
-  console.log("[Config] Camera:", cameraConfig);
-
-  // API key remains on the backend.
-  const connector = connectors.withProxyUrl(
-    "/api/init-webrtc",
-    {
-      turnConfigUrl: "/api/turn-config"
-    }
-  );
-
-  const videoConstraints = {
-    width: {
-      ideal: cameraConfig.width
-    },
-    height: {
-      ideal: cameraConfig.height
-    },
-    frameRate: {
-      ideal: cameraConfig.frameRate,
-      max: cameraConfig.frameRate
-    }
-  };
-
-  if (cameraConfig.deviceId) {
-    videoConstraints.deviceId = {
-      exact: cameraConfig.deviceId
-    };
-  } else {
-    videoConstraints.facingMode = {
-      ideal: "environment"
-    };
-  }
-
-  const baseParams = {
-    imageInputName: config.imageInputName,
-    streamOutputNames: config.streamOutputNames,
-    dataOutputNames: config.dataOutputNames,
-    requestedRegion: config.requestedRegion,
-    requestedPlan: config.requestedPlan,
-    processingTimeout: config.processingTimeout
-  };
-
-  const wrtcParams =
-    config.mode === "example"
-      ? {
-          ...baseParams,
-          workflowSpec: config.workflowSpec
-        }
-      : {
-          ...baseParams,
-          workspaceName: config.workspaceName,
-          workflowId: config.workflowId
-        };
-
-  // Allow the SDK to downscale the outgoing video if needed.
-  // This can reduce bandwidth and processing load.
-  const connection = await webrtc.useStream({
-    source: await streams.useCamera({
-      video: videoConstraints,
-      audio: false
-    }),
-
-    connector,
-    wrtcParams,
-
-    onData: handleData,
-
-    options: {
-      disableInputStreamDownscaling: false
-    }
-  });
-
-  return connection;
-}
-
-// ============================================================
-// 10. INCOMING DETECTION DATA
-// ============================================================
-
-function handleData(data) {
-  console.log("[Detection data]", data);
-
-  dataMessageCount++;
-
-  if (dataCountEl) {
-    dataCountEl.textContent = String(dataMessageCount);
-  }
-
-  if (dataPreviewEl) {
-    try {
-      dataPreviewEl.textContent = JSON.stringify(data, null, 2);
-    } catch {
-      dataPreviewEl.textContent = String(data);
-    }
-  }
-}
-
-// ============================================================
-// 11. START STREAMING
-// ============================================================
-
-async function start() {
-  if (isStarting || activeConnection) {
-    return;
-  }
-
-  if (!navigator.mediaDevices?.getUserMedia) {
-    showError(
-      "Camera access is unavailable. Open the website over HTTPS and use a supported browser."
-    );
-    return;
-  }
-
-  isStarting = true;
-  setButtons({ starting: true });
-  resetDataDisplay();
-
-  setStatus("Preparing camera...");
-
-  let newConnection = null;
-
-  try {
-    // This SDK call obtains camera access and establishes the stream.
-    setStatus("Requesting camera and connecting to Roboflow...");
-
-    newConnection = await connectWebcamToRoboflowWebRTC();
-
-    activeConnection = newConnection;
-
-    setStatus("Establishing video stream...");
-
-    const remoteStream = await newConnection.remoteStream();
-
-    if (!remoteStream) {
-      throw new Error(
-        "The connection opened but no remote video stream was returned."
-      );
-    }
-
-    videoEl.srcObject = remoteStream;
-    videoEl.controls = false;
-    videoEl.muted = true;
-    videoEl.autoplay = true;
-    videoEl.playsInline = true;
-
-    try {
-      await videoEl.play();
-    } catch (playError) {
-      console.warn(
-        "[Video] Autoplay was blocked:",
-        playError
-      );
-
-      setStatus(
-        "Connected. If video stays paused, press Play on the video."
-      );
-    }
-
-    // Permission is now likely available, so camera names may be clearer.
-    enumerateCameras().catch(error => {
-      console.warn("[Camera] Refresh failed:", error);
-    });
-
-    setButtons({ connected: true });
-    setStatus("Connected — AI is processing video.");
-
-    console.log("[VISION LAB] Streaming started.");
-  } catch (error) {
-    console.error("[VISION LAB] Startup failed:", error);
-
-    if (newConnection) {
-      try {
-        await newConnection.cleanup();
-      } catch (cleanupError) {
-        console.warn(
-          "[Cleanup] Failed to clean up failed connection:",
-          cleanupError
-        );
-      }
-    }
-
-    if (activeConnection === newConnection) {
-      activeConnection = null;
-    }
-
-    if (videoEl) {
-      videoEl.srcObject = null;
-    }
-
-    const message =
-      error?.message || "An unknown connection error occurred.";
-
-    if (/permission|denied|notallowed/i.test(message)) {
-      showError(
-        "Camera permission was denied. Allow camera access in your browser settings, then try again."
-      );
-    } else if (/notfound|device not found/i.test(message)) {
-      showError(
-        "No usable camera was found. Check that your camera is connected and not being used exclusively by another app."
-      );
-    } else if (/overconstrained/i.test(message)) {
-      showError(
-        "The selected camera does not support these settings. Choose a lower resolution or use the default camera."
-      );
-    } else if (/api key/i.test(message)) {
-      showError(
-        "The server API key is not configured correctly. Check the ROBOFLOW_API_KEY environment variable in Render."
-      );
-    } else {
-      showError(message);
-    }
-
-    setButtons();
-  } finally {
-    isStarting = false;
-
-    if (!activeConnection && startBtn) {
-      startBtn.disabled = false;
-    }
-  }
-}
-
-// ============================================================
-// 12. STOP STREAMING
-// ============================================================
-
-async function stop() {
-  if (!activeConnection || isStopping) {
-    return;
-  }
-
-  isStopping = true;
-
-  const connectionToStop = activeConnection;
-
-  if (stopBtn) {
-    stopBtn.disabled = true;
-  }
-
-  setStatus("Stopping stream...");
-
-  try {
-    await connectionToStop.cleanup();
-    console.log("[VISION LAB] Connection cleaned up.");
-  } catch (error) {
-    console.error("[Cleanup] Error stopping connection:", error);
-  } finally {
-    if (activeConnection === connectionToStop) {
-      activeConnection = null;
-    }
-
-    if (videoEl) {
-      videoEl.pause();
-      videoEl.srcObject = null;
-    }
-
-    resetDataDisplay();
-    setButtons();
-    setStatus("Idle");
-
-    isStopping = false;
-  }
-}
-
-// ============================================================
-// 13. BUTTON LISTENERS
-// ============================================================
-
-startBtn?.addEventListener("click", start);
-stopBtn?.addEventListener("click", stop);
-
-// ============================================================
-// 14. SERVER HEALTH CHECK
-// ============================================================
-
-async function checkServerHealth() {
-  try {
-    const response = await fetch("/api/health");
-
-    if (!response.ok) {
-      throw new Error(`Health check returned HTTP ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    console.log("[Server health]", data);
-
-    if (data.apiKeyConfigured === false) {
-      console.warn(
-        "[Server] ROBOFLOW_API_KEY is not configured."
-      );
-    }
-  } catch (error) {
-    // A failed health check should not prevent the user from trying Start.
-    console.warn("[Server] Health check failed:", error);
-  }
-}
-
-// ============================================================
-// 15. PAGE INITIALIZATION AND CLEANUP
-// ============================================================
-
-setButtons();
-setStatus("Ready — click Start to begin.");
-
-enumerateCameras();
-checkServerHealth();
-
-async function cleanupOnExit() {
-  if (activeConnection) {
-    const connection = activeConnection;
-    activeConnection = null;
-
-    try {
-      await connection.cleanup();
-    } catch (error) {
-      console.warn("[Cleanup] Exit cleanup failed:", error);
-    }
-  }
-}
-
-window.addEventListener("pagehide", cleanupOnExit);
