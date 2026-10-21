@@ -1,0 +1,704 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#080b16" />
+  <title>VISION LAB | AI Control Center</title>
+
+  <style>
+    :root {
+      --bg: #080b16;
+      --panel: #101629;
+      --panel2: #141d33;
+      --border: #25304a;
+      --text: #edf4ff;
+      --muted: #8b9bb8;
+      --accent: #42e8ff;
+      --accent-rgb: 66,232,255;
+      --purple: #a78bfa;
+      --green: #3ee6b0;
+      --danger: #ff718c;
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(ellipse at 75% 0%, rgba(var(--accent-rgb), .07), transparent 38%),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+    }
+
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+
+    button:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
+
+    .app { min-height: 100vh; }
+
+    .sidebar {
+      width: 248px;
+      position: fixed;
+      inset: 0 auto 0 0;
+      z-index: 5;
+      display: flex;
+      flex-direction: column;
+      padding: 22px 14px;
+      background: rgba(12, 17, 32, .96);
+      border-right: 1px solid var(--border);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      padding: 0 8px 26px;
+    }
+
+    .brand-icon {
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      color: var(--accent);
+      border: 1px solid rgba(var(--accent-rgb), .45);
+      border-radius: 13px;
+      box-shadow: 0 0 24px rgba(var(--accent-rgb), .1);
+      font-size: 22px;
+    }
+
+    .brand-name { font-size: 17px; font-weight: 850; letter-spacing: 1.5px; }
+    .brand-sub { font-size: 9px; color: var(--muted); letter-spacing: 1.3px; margin-top: 4px; }
+
+    .nav-label {
+      color: #62718d;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 1.6px;
+      padding: 12px 12px 8px;
+    }
+
+    .nav-btn {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      padding: 12px;
+      margin: 3px 0;
+      text-align: left;
+      color: #a7b5cf;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 11px;
+      transition: .2s ease;
+    }
+
+    .nav-btn:hover { background: #141d32; color: var(--text); }
+
+    .nav-btn.active {
+      color: var(--accent);
+      background: rgba(var(--accent-rgb), .09);
+      border-color: rgba(var(--accent-rgb), .22);
+    }
+
+    .nav-icon { width: 22px; text-align: center; font-size: 17px; }
+
+    .sidebar-bottom {
+      margin-top: auto;
+      border-top: 1px solid var(--border);
+      padding: 16px 8px 0;
+    }
+
+    .system-pill {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      flex: 0 0 auto;
+      background: var(--green);
+      border-radius: 50%;
+      box-shadow: 0 0 12px rgba(62,230,176,.5);
+    }
+
+    main {
+      margin-left: 248px;
+      padding: 26px;
+      max-width: 1800px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 26px;
+    }
+
+    .eyebrow {
+      color: var(--accent);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    h1 { margin: 7px 0 0; font-size: clamp(24px, 3vw, 34px); letter-spacing: -.8px; }
+    h2 { margin: 0; font-size: 17px; }
+    h3 { margin: 0 0 8px; font-size: 14px; }
+    p { color: var(--muted); line-height: 1.6; }
+
+    .top-actions { display: flex; align-items: center; gap: 10px; }
+
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      color: var(--muted);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .btn {
+      border: 1px solid var(--border);
+      color: var(--text);
+      background: var(--panel2);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-weight: 700;
+      font-size: 12px;
+      transition: .2s ease;
+    }
+
+    .btn:hover { border-color: var(--accent); }
+    .btn.primary { background: var(--accent); color: #061019; border-color: var(--accent); }
+    .btn.danger { color: var(--danger); border-color: rgba(255,113,140,.35); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+    .view { display: none; }
+    .view.active { display: block; animation: enter .2s ease; }
+
+    @keyframes enter {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .grid-main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 310px;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      background: linear-gradient(145deg, rgba(19,28,49,.96), rgba(13,19,35,.98));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 17px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-body { padding: 18px; }
+    .muted { color: var(--muted); font-size: 12px; }
+
+    .feed-wrap {
+      position: relative;
+      display: grid;
+      place-items: center;
+      min-height: 360px;
+      aspect-ratio: 16 / 10;
+      overflow: hidden;
+      background:
+        linear-gradient(rgba(var(--accent-rgb),.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(var(--accent-rgb),.035) 1px, transparent 1px),
+        #070c17;
+      background-size: 28px 28px;
+    }
+
+    #video {
+      display: block;
+      width: 100%;
+      height: 100%;
+      max-height: 68vh;
+      object-fit: contain;
+      background: #050811;
+    }
+
+    .feed-placeholder {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-content: center;
+      justify-items: center;
+      gap: 12px;
+      text-align: center;
+      padding: 24px;
+      pointer-events: none;
+    }
+
+    .feed-placeholder .scan {
+      display: grid;
+      place-items: center;
+      width: 70px;
+      height: 70px;
+      color: var(--accent);
+      border: 1px solid rgba(var(--accent-rgb),.45);
+      border-radius: 22px;
+      font-size: 30px;
+      box-shadow: 0 0 35px rgba(var(--accent-rgb),.08);
+    }
+
+    .feed-placeholder strong { font-size: 13px; letter-spacing: 1.4px; }
+    .feed-placeholder span { max-width: 270px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+    .feed-corners {
+      position: absolute;
+      inset: 12px;
+      border: 1px solid rgba(var(--accent-rgb),.18);
+      pointer-events: none;
+    }
+
+    .feed-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 13px 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    .feed-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0,1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .stat {
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      background: var(--panel);
+    }
+
+    .stat-label { color: var(--muted); font-size: 11px; }
+    .stat-value { margin-top: 9px; font-size: 25px; font-weight: 800; }
+    .stat-note { margin-top: 5px; color: var(--accent); font-size: 10px; }
+
+    .detection-list { display: grid; gap: 10px; }
+    .detection-item {
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(7,12,24,.5);
+    }
+
+    .detection-top { display: flex; justify-content: space-between; gap: 10px; }
+    .detection-name { font-size: 13px; font-weight: 750; overflow-wrap: anywhere; }
+    .confidence { color: var(--accent); font-size: 12px; font-weight: 800; }
+    .meter { height: 4px; margin-top: 10px; background: #26314a; border-radius: 99px; overflow: hidden; }
+    .meter > span { display: block; height: 100%; width: 0; background: var(--accent); border-radius: inherit; }
+
+    .empty-state {
+      padding: 24px 12px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    .form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+    .field { display: grid; gap: 8px; min-width: 0; }
+    .field.full { grid-column: 1 / -1; }
+    .field label { color: #bac7dd; font-size: 12px; font-weight: 700; }
+
+    .field input, .field select {
+      width: 100%;
+      min-width: 0;
+      padding: 12px;
+      color: var(--text);
+      background: #080e1c;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+
+    .field input[type="range"] { padding: 0; accent-color: var(--accent); }
+    .field input[type="color"] { min-height: 42px; padding: 4px; }
+
+    .section-stack { display: grid; gap: 18px; }
+    .section-title { margin: 0 0 16px; }
+    .section-description { margin: -7px 0 18px; font-size: 12px; }
+
+    .theme-options { display: flex; flex-wrap: wrap; gap: 10px; }
+    .theme-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      color: var(--text);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+
+    .theme-btn.active { border-color: var(--accent); }
+    .swatch { width: 12px; height: 12px; border-radius: 50%; background: var(--swatch); box-shadow: 0 0 10px var(--swatch); }
+
+    .history-row {
+      display: grid;
+      grid-template-columns: minmax(0,1fr) auto;
+      gap: 12px;
+      padding: 15px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .history-row:last-child { border-bottom: 0; }
+    .history-title { font-weight: 750; font-size: 13px; }
+    .history-meta { color: var(--muted); font-size: 11px; margin-top: 5px; }
+    .history-confidence { color: var(--accent); font-size: 12px; font-weight: 800; }
+
+    .notice {
+      padding: 13px 14px;
+      border: 1px solid rgba(var(--accent-rgb),.2);
+      border-radius: 11px;
+      color: #bac7dd;
+      background: rgba(var(--accent-rgb),.045);
+      font-size: 12px;
+      line-height: 1.65;
+    }
+
+    .warning {
+      border-color: rgba(255,190,90,.3);
+      background: rgba(255,190,90,.05);
+    }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 1100px) {
+      .grid-main { grid-template-columns: minmax(0,1fr) 270px; }
+      main { padding: 20px; }
+    }
+
+    @media (max-width: 850px) {
+      .sidebar { width: 70px; padding: 16px 8px; }
+      .brand { justify-content: center; padding: 0 0 22px; }
+      .brand-copy, .nav-label, .nav-text, .sidebar-bottom .system-text { display: none; }
+      .nav-btn { justify-content: center; padding: 13px 6px; }
+      .nav-icon { width: auto; }
+      .sidebar-bottom { padding: 15px 0 0; }
+      .system-pill { justify-content: center; }
+      main { margin-left: 70px; }
+      .grid-main { grid-template-columns: 1fr; }
+      .feed-wrap { min-height: 270px; }
+    }
+
+    @media (max-width: 560px) {
+      main { padding: 14px; }
+      .topbar { align-items: flex-start; }
+      .top-actions { flex-direction: column; align-items: flex-end; }
+      .status-chip { font-size: 10px; }
+      .stat-grid { grid-template-columns: 1fr; }
+      .form-grid { grid-template-columns: 1fr; }
+      .field.full { grid-column: auto; }
+      .feed-wrap { min-height: 230px; }
+      .panel-body { padding: 14px; }
+      h1 { font-size: 23px; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">⌁</div>
+        <div class="brand-copy">
+          <div class="brand-name">VISION LAB</div>
+          <div class="brand-sub">AI CONTROL CENTER</div>
+        </div>
+      </div>
+
+      <div class="nav-label">WORKSPACE</div>
+      <button class="nav-btn active" data-view="vision"><span class="nav-icon">⌁</span><span class="nav-text">Live Vision</span></button>
+      <button class="nav-btn" data-view="dashboard"><span class="nav-icon">▦</span><span class="nav-text">Dashboard</span></button>
+      <button class="nav-btn" data-view="history"><span class="nav-icon">◷</span><span class="nav-text">Reading History</span></button>
+
+      <div class="nav-label">CONFIGURATION</div>
+      <button class="nav-btn" data-view="pipeline"><span class="nav-icon">⛭</span><span class="nav-text">Inference Pipeline</span></button>
+      <button class="nav-btn" data-view="settings"><span class="nav-icon">⚙</span><span class="nav-text">Settings</span></button>
+      <button class="nav-btn" data-view="system"><span class="nav-icon">⌘</span><span class="nav-text">System Status</span></button>
+
+      <div class="sidebar-bottom">
+        <div class="system-pill"><span class="dot" id="systemDot"></span><span class="system-text" id="systemLabel">System ready</span></div>
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">COMPUTER VISION / REAL-TIME</div>
+          <h1 id="pageTitle">Live Vision</h1>
+        </div>
+        <div class="top-actions">
+          <span class="status-chip"><span class="dot" id="headerDot"></span><span id="status">Ready — click Start</span></span>
+          <button class="btn primary" id="startBtn">▶ Start</button>
+          <button class="btn danger" id="stopBtn" disabled>■ Stop</button>
+        </div>
+      </header>
+
+      <section class="view active" id="view-vision">
+        <div class="grid-main">
+          <div class="section-stack">
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Live Vision Feed</h2>
+                  <div class="muted" style="margin-top:5px">Processed video from your Roboflow workflow</div>
+                </div>
+                <span class="status-chip"><span class="dot" id="feedDot" style="background:#71809a;box-shadow:none"></span><span id="feedState">STANDBY</span></span>
+              </div>
+
+              <div class="feed-wrap">
+                <video id="video" autoplay muted playsinline></video>
+                <div class="feed-placeholder" id="feedPlaceholder">
+                  <div class="scan">⌁</div>
+                  <strong>VISION SYSTEM STANDBY</strong>
+                  <span>Press Start to connect the camera and begin live object detection.</span>
+                </div>
+                <div class="feed-corners"></div>
+              </div>
+
+              <div class="feed-footer">
+                <div class="muted" id="feedHint">Camera is not connected.</div>
+                <div class="feed-actions">
+                  <button class="btn" id="openPipelineBtn">Pipeline settings</button>
+                  <button class="btn" id="openSettingsBtn">Appearance</button>
+                </div>
+              </div>
+            </section>
+
+            <div class="stat-grid">
+              <div class="stat"><div class="stat-label">DETECTIONS RECEIVED</div><div class="stat-value" id="totalDetections">0</div><div class="stat-note">Current session</div></div>
+              <div class="stat"><div class="stat-label">UNIQUE CLASSES</div><div class="stat-value" id="uniqueClasses">0</div><div class="stat-note">Current session</div></div>
+              <div class="stat"><div class="stat-label">CONFIDENCE THRESHOLD</div><div class="stat-value" id="thresholdMetric">50%</div><div class="stat-note">Pipeline configuration</div></div>
+            </div>
+          </div>
+
+          <aside class="panel">
+            <div class="panel-head">
+              <div><h2>Detected Items</h2><div class="muted" style="margin-top:5px">Live inference results</div></div>
+              <span class="status-chip" id="visibleCount">0 items</span>
+            </div>
+            <div class="panel-body">
+              <div class="detection-list" id="detectionList">
+                <div class="empty-state">No detections yet.<br/>Start the camera to see recognized objects here.</div>
+              </div>
+              <div class="notice" style="margin-top:16px">
+                Confidence filtering is applied in the inference workflow in Dynamic Model mode. Saved Workflow mode uses the threshold configured in Roboflow.
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="view" id="view-dashboard">
+        <div class="stat-grid">
+          <div class="stat"><div class="stat-label">SESSION EVENTS</div><div class="stat-value" id="dashEvents">0</div><div class="stat-note">Recorded locally</div></div>
+          <div class="stat"><div class="stat-label">DETECTED CLASSES</div><div class="stat-value" id="dashClasses">0</div><div class="stat-note">This session</div></div>
+          <div class="stat"><div class="stat-label">CURRENT THRESHOLD</div><div class="stat-value" id="dashThreshold">50%</div><div class="stat-note">Confidence</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>System Overview</h2><button class="btn" data-go="vision">Open Live Vision</button></div>
+          <div class="panel-body">
+            <div class="notice">This dashboard shows real session information from your browser. It does not fabricate detections or claim the server is connected before a stream is established.</div>
+            <div style="height:16px"></div>
+            <h3>Recent detections</h3>
+            <div id="dashboardRecent" class="muted">No detection events recorded yet.</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-history">
+        <div class="panel">
+          <div class="panel-head">
+            <div><h2>Reading History</h2><div class="muted" style="margin-top:5px">Detection events saved in this browser</div></div>
+            <button class="btn danger" id="clearHistoryBtn">Clear history</button>
+          </div>
+          <div class="panel-body">
+            <div class="field" style="margin-bottom:16px">
+              <label for="historySearch">Search history</label>
+              <input id="historySearch" placeholder="Search by class name..." />
+            </div>
+            <div id="historyList"><div class="empty-state">History will appear when detections arrive.</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-pipeline">
+        <div class="section-stack">
+          <div class="panel">
+            <div class="panel-head"><div><h2>Inference Pipeline</h2><div class="muted" style="margin-top:5px">Model, workflow and prediction controls</div></div></div>
+            <div class="panel-body">
+              <div class="notice warning">
+                Actual threshold control requires Dynamic Model mode, which builds a workflow specification with a server-side model confidence setting. Saved Workflow mode cannot have its saved model settings changed by this page alone.
+              </div>
+              <div style="height:18px"></div>
+
+              <div class="form-grid">
+                <div class="field full">
+                  <label for="inferenceMode">Inference configuration mode</label>
+                  <select id="inferenceMode">
+                    <option value="dynamic">Dynamic Model — threshold set in workflow</option>
+                    <option value="saved">Saved Roboflow Workflow — use saved settings</option>
+                  </select>
+                </div>
+
+                <div class="field full" id="modelIdField">
+                  <label for="modelId">Roboflow model ID</label>
+                  <input id="modelId" value="kumud-gupta/vision-lab-hlfnm-4-rfdetr-small-t1" />
+                  <div class="muted">Verify this exact model ID in your Roboflow project before starting.</div>
+                </div>
+
+                <div class="field">
+                  <label for="workspaceName">Workspace name</label>
+                  <input id="workspaceName" value="kumud-gupta" />
+                </div>
+                <div class="field">
+                  <label for="workflowId">Saved workflow ID</label>
+                  <input id="workflowId" value="vision-lab-vvision-lab-hlfnm-4-rfdetr-small-t1-logic" />
+                </div>
+                <div class="field">
+                  <label for="imageInputName">Image input name</label>
+                  <input id="imageInputName" value="image" />
+                </div>
+                <div class="field">
+                  <label for="streamOutputNames">Stream output name(s)</label>
+                  <input id="streamOutputNames" value="output_image" />
+                </div>
+                <div class="field">
+                  <label for="dataOutputNames">Data output name(s)</label>
+                  <input id="dataOutputNames" value="predictions" />
+                </div>
+                <div class="field">
+                  <label for="requestedRegion">Inference region</label>
+                  <select id="requestedRegion"><option value="us">US</option><option value="eu">EU</option></select>
+                </div>
+                <div class="field">
+                  <label for="requestedPlan">Inference plan</label>
+                  <input id="requestedPlan" value="webrtc-gpu-small" />
+                </div>
+                <div class="field">
+                  <label for="processingTimeout">Processing timeout (seconds)</label>
+                  <input id="processingTimeout" type="number" min="30" max="1800" value="600" />
+                </div>
+              </div>
+
+              <div style="height:20px"></div>
+              <div class="field">
+                <label for="confidenceThreshold">Actual model confidence threshold <strong id="thresholdLabel">50%</strong></label>
+                <input id="confidenceThreshold" type="range" min="5" max="95" step="5" value="50" />
+                <div class="muted" id="thresholdHelp">Dynamic Model mode applies this threshold inside the model block. Changing it restarts the stream.</div>
+              </div>
+
+              <div style="height:20px"></div>
+              <div class="feed-actions">
+                <button class="btn primary" id="savePipelineBtn">Save configuration</button>
+                <button class="btn" id="applyPipelineBtn">Apply and reconnect</button>
+              </div>
+              <p class="muted">Configuration is saved in this browser. The API key is never stored here.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-settings">
+        <div class="section-stack">
+          <div class="panel">
+            <div class="panel-head"><h2>Neon Theme</h2></div>
+            <div class="panel-body">
+              <p class="section-description">Choose the accent colour used throughout the control center.</p>
+              <div class="theme-options">
+                <button class="theme-btn active" data-theme="cyan" style="--swatch:#42e8ff"><span class="swatch"></span>Cyan</button>
+                <button class="theme-btn" data-theme="purple" style="--swatch:#b78cff"><span class="swatch"></span>Purple</button>
+                <button class="theme-btn" data-theme="emerald" style="--swatch:#3ee6b0"><span class="swatch"></span>Emerald</button>
+                <button class="theme-btn" data-theme="red" style="--swatch:#ff718c"><span class="swatch"></span>Crimson</button>
+                <button class="theme-btn" data-theme="amber" style="--swatch:#ffca70"><span class="swatch"></span>Amber</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><h2>Display preferences</h2></div>
+            <div class="panel-body">
+              <div class="form-grid">
+                <div class="field">
+                  <label for="densitySelect">Interface density</label>
+                  <select id="densitySelect"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select>
+                </div>
+                <div class="field">
+                  <label for="boxStyleSelect">Detection display style</label>
+                  <select id="boxStyleSelect"><option value="normal">Default workflow display</option><option value="minimal">Minimal UI panels</option></select>
+                </div>
+                <div class="field full">
+                  <label><input type="checkbox" id="showSidebar" checked /> Keep detection sidebar visible</label>
+                </div>
+              </div>
+              <div style="height:18px"></div>
+              <button class="btn primary" id="saveSettingsBtn">Save appearance</button>
+              <p class="muted">The detection-box style is controlled by the returned workflow video. This setting changes the dashboard layout, not the server's visualization block.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-system">
+        <div class="section-stack">
+          <div class="panel">
+            <div class="panel-head"><h2>System Status</h2><button class="btn" id="healthCheckBtn">Check backend</button></div>
+            <div class="panel-body">
+              <div class="form-grid">
+                <div class="stat"><div class="stat-label">FRONTEND</div><div class="stat-value" style="font-size:18px">Loaded</div><div class="stat-note">Browser application active</div></div>
+                <div class="stat"><div class="stat-label">STREAM</div><div class="stat-value" style="font-size:18px" id="systemStream">Idle</div><div class="stat-note">WebRTC session</div></div>
+                <div class="stat"><div class="stat-label">BACKEND</div><div class="stat-value" style="font-size:18px" id="backendState">Checking</div><div class="stat-note">/api/health</div></div>
+                <div class="stat"><div class="stat-label">API KEY</div><div class="stat-value" style="font-size:18px" id="apiKeyState">Not verified</div><div class="stat-note">Status only; key is not shown</div></div>
+              </div>
+              <div class="notice">This page only reports what the health endpoint returns. Keep <code>ROBOFLOW_API_KEY</code> in Render environment variables, never in frontend code.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
