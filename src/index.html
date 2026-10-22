@@ -574,43 +574,12 @@
             <!-- Only two visible statistics -->
             <div class="stat-grid">
               <div class="stat">
-                <div class="stat-label">DETECTIONS RECEIVED</div>
-                <div class="stat-value" id="totalDetections">0</div>
-                <div class="stat-note">Current session</div>
-              </div>
-
-              <div class="stat">
                 <div class="stat-label">CONFIDENCE THRESHOLD</div>
                 <div class="stat-value" id="thresholdMetric">50%</div>
                 <div class="stat-note">Pipeline configuration</div>
               </div>
             </div>
           </div>
-
-          <!-- DETECTED ITEMS -->
-          <aside class="panel" id="detectionSidebar">
-            <div class="panel-head">
-              <div>
-                <h2>Detected Items</h2>
-                <div class="muted" style="margin-top:5px">Live inference results</div>
-              </div>
-              <span class="status-chip" id="visibleCount">0 items</span>
-            </div>
-
-            <div class="panel-body">
-              <div class="detection-list" id="detectionList">
-                <div class="empty-state">
-                  No detections yet.<br />
-                  Start the camera to see recognized objects here.
-                </div>
-              </div>
-
-              <div class="notice" style="margin-top:16px">
-                Confidence filtering is applied in the inference workflow in Dynamic Model mode.
-                Saved Workflow mode uses the threshold configured in Roboflow.
-              </div>
-            </div>
-          </aside>
         </div>
       </section>
 
@@ -883,6 +852,9 @@
         Keeping their IDs helps avoid null-element errors.
       -->
       <div class="compat-hidden" aria-hidden="true">
+        <span id="totalDetections">0</span>
+        <span id="visibleCount">0 items</span>
+        <div id="detectionList"></div>
         <span id="uniqueClasses">0</span>
         <span id="dashClasses">0</span>
 
