@@ -1,4 +1,3 @@
-```html
 <!doctype html>
 <html lang="en">
 <head>
@@ -26,6 +25,8 @@
     * { box-sizing: border-box; }
 
     [hidden] { display: none !important; }
+    /* app.js toggles this class to hide the standby overlay when video is live. */
+    .hidden { display: none !important; }
 
     body {
       margin: 0;
@@ -901,4 +902,3 @@
   <script type="module" src="./app.js"></script>
 </body>
 </html>
-```
