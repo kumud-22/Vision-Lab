@@ -462,6 +462,229 @@
       .panel-body { padding: 14px; }
       h1 { font-size: 23px; }
     }
+
+    /* =========================================================
+       CINEMATIC VISION LAB — jet black / cerulean / neon rose
+       ========================================================= */
+    :root {
+      --bg: #030405;
+      --panel: #090b11;
+      --panel2: #10131b;
+      --border: rgba(0, 123, 167, .30);
+      --text: #f5f7fb;
+      --muted: #91a0b4;
+      --accent: #0788b8;
+      --accent-rgb: 7,136,184;
+      --purple: #ff2d75;
+      --green: #ff2d75;
+      --danger: #ff2d75;
+      --radius: 15px;
+    }
+
+    body {
+      background:
+        radial-gradient(ellipse at 78% 14%, rgba(0,123,167,.15), transparent 32%),
+        radial-gradient(ellipse at 72% 48%, rgba(255,45,117,.08), transparent 27%),
+        #030405;
+    }
+
+    .sidebar {
+      background: rgba(3,4,7,.96);
+      border-right-color: rgba(0,123,167,.25);
+    }
+
+    .brand-icon {
+      border-color: rgba(255,45,117,.6);
+      color: #ff2d75;
+      box-shadow: 0 0 28px rgba(255,45,117,.12);
+    }
+
+    .brand-name { letter-spacing: 2.4px; }
+    .nav-label { color: #5b7487; }
+    .nav-btn { border-radius: 8px; }
+    .nav-btn.active {
+      color: #ff5c93;
+      background: rgba(255,45,117,.075);
+      border-color: rgba(255,45,117,.32);
+      box-shadow: inset 2px 0 #ff2d75;
+    }
+
+    main { padding: 28px clamp(18px, 3vw, 48px); }
+    .topbar { margin-bottom: 30px; }
+    .eyebrow { color: #ff5c93; letter-spacing: 2.8px; }
+    h1 { letter-spacing: -1.2px; font-weight: 850; }
+    .panel {
+      background: linear-gradient(145deg, rgba(12,16,25,.97), rgba(5,7,12,.99));
+      border-color: rgba(0,123,167,.28);
+      box-shadow: 0 18px 55px rgba(0,0,0,.22);
+    }
+    .panel-head { border-bottom-color: rgba(0,123,167,.2); }
+    .status-chip { background: rgba(6,9,15,.88); border-color: rgba(0,123,167,.28); }
+    .btn { background: #0c1018; border-color: rgba(0,123,167,.28); }
+    .btn:hover { border-color: #ff2d75; box-shadow: 0 0 20px rgba(255,45,117,.09); }
+    .btn.primary {
+      color: #fff;
+      background: linear-gradient(100deg, #006c97, #0788b8);
+      border-color: #0788b8;
+      box-shadow: 0 0 24px rgba(0,123,167,.2);
+    }
+    .feed-wrap {
+      background:
+        linear-gradient(rgba(0,123,167,.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,123,167,.045) 1px, transparent 1px),
+        #020305;
+      background-size: 30px 30px;
+    }
+    .feed-corners { border-color: rgba(255,45,117,.2); }
+    .stat, .field input:not([type="checkbox"]), .field select {
+      background: #07090e;
+      border-color: rgba(0,123,167,.26);
+    }
+    .notice {
+      background: rgba(0,123,167,.07);
+      border-color: rgba(0,123,167,.25);
+    }
+    .dot { box-shadow: 0 0 12px rgba(255,45,117,.4); }
+
+    .cinematic-hero {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 1.03fr) minmax(280px, .97fr);
+      align-items: center;
+      min-height: clamp(360px, 43vw, 540px);
+      margin: 0 0 30px;
+      padding: clamp(25px, 4vw, 56px);
+      overflow: hidden;
+      isolation: isolate;
+      background:
+        radial-gradient(ellipse at 78% 46%, rgba(0,123,167,.16), transparent 34%),
+        radial-gradient(ellipse at 78% 70%, rgba(255,45,117,.12), transparent 29%),
+        linear-gradient(110deg, #030405 10%, #05070c 70%, #07060b);
+      border: 1px solid rgba(0,123,167,.22);
+      border-radius: 18px;
+      box-shadow: inset 0 0 70px rgba(0,0,0,.65), 0 25px 80px rgba(0,0,0,.25);
+    }
+    .cinematic-hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      opacity: .18;
+      background-image: linear-gradient(rgba(0,123,167,.18) 1px, transparent 1px), linear-gradient(90deg, rgba(0,123,167,.18) 1px, transparent 1px);
+      background-size: 46px 46px;
+      mask-image: linear-gradient(90deg, transparent, black);
+    }
+    .hero-copy { position: relative; z-index: 2; }
+    .hero-eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 23px;
+      color: #a6b5c7;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 3px;
+    }
+    .hero-pulse { width: 7px; height: 7px; border-radius: 50%; background: #ff2d75; box-shadow: 0 0 15px #ff2d75; }
+    .hero-title {
+      margin: 0;
+      font-size: clamp(54px, 8.5vw, 112px);
+      line-height: .82;
+      letter-spacing: -.075em;
+      font-weight: 950;
+      color: #d9f5ff;
+      text-shadow: 0 0 28px rgba(0,123,167,.22);
+    }
+    .hero-title span {
+      display: block;
+      margin-top: 12px;
+      color: #ff2d75;
+      text-shadow: 0 0 28px rgba(255,45,117,.24);
+    }
+    .hero-tagline {
+      margin: 27px 0 0;
+      color: #aab7c9;
+      font-size: clamp(11px, 1.3vw, 15px);
+      font-weight: 800;
+      letter-spacing: clamp(2px, .5vw, 5px);
+      line-height: 1.9;
+    }
+    .hero-tagline strong { color: #ff5c93; }
+    .hero-description { max-width: 350px; margin: 12px 0 24px; font-size: 12px; }
+    .hero-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 13px;
+      padding: 8px 18px 8px 8px;
+      color: #f6f8fc;
+      background: transparent;
+      border: 0;
+      font-size: 10px;
+      font-weight: 850;
+      letter-spacing: 2px;
+    }
+    .hero-cta span {
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      color: #8ddfff;
+      border: 1px solid rgba(0,123,167,.8);
+      border-radius: 50%;
+      font-size: 23px;
+      transition: .2s ease;
+    }
+    .hero-cta:hover span { color: white; background: #007ba7; box-shadow: 0 0 24px rgba(0,123,167,.45); transform: translate(3px,-2px); }
+    .hero-footnote { display: flex; align-items: center; gap: 9px; margin-top: 35px; color: #66788c; font-size: 9px; letter-spacing: 1.6px; }
+    .hero-line { width: 27px; height: 1px; background: #ff2d75; }
+    .hero-separator { color: #ff2d75; }
+    .hero-visual { position: relative; min-height: 300px; height: 100%; display: grid; place-items: center; }
+    .hero-orbit { position: absolute; width: min(31vw, 340px); aspect-ratio: 1; border: 1px solid rgba(0,123,167,.34); border-radius: 50%; transform: rotate(-25deg) scaleY(.74); }
+    .orbit-one { box-shadow: 0 0 45px rgba(0,123,167,.08), inset 0 0 35px rgba(0,123,167,.05); }
+    .orbit-two { width: min(25vw, 270px); border-color: rgba(255,45,117,.4); transform: rotate(42deg) scaleY(.72); }
+    .hero-core {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: clamp(125px, 16vw, 205px);
+      aspect-ratio: 1;
+      border: 1px solid rgba(0,123,167,.75);
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,123,167,.2), rgba(4,7,13,.15) 58%, transparent 70%);
+      box-shadow: 0 0 65px rgba(0,123,167,.17), inset 0 0 45px rgba(255,45,117,.08);
+    }
+    .core-eye { width: 35%; aspect-ratio: 1; border: 2px solid #64d9ff; border-radius: 50%; box-shadow: 0 0 26px #007ba7, inset 0 0 22px rgba(0,123,167,.6); }
+    .core-ring { position: absolute; inset: 18%; border: 1px dashed rgba(255,45,117,.65); border-radius: 50%; animation: heroSpin 18s linear infinite; }
+    @keyframes heroSpin { to { transform: rotate(360deg); } }
+    .hero-crosshair { position: absolute; width: 15px; height: 15px; border-color: #ff2d75; opacity: .9; }
+    .crosshair-a { top: 22%; right: 18%; border-top: 1px solid; border-right: 1px solid; }
+    .crosshair-b { bottom: 22%; left: 15%; border-bottom: 1px solid; border-left: 1px solid; }
+    .hero-visual-label { position: absolute; color: #74879a; font-size: 8px; font-weight: 800; letter-spacing: 2px; }
+    .hero-visual-label b { margin-left: 7px; color: #ff5c93; }
+    .label-top { top: 13%; right: 2%; }
+    .label-bottom { bottom: 12%; left: 8%; color: #4f7e92; }
+    .hero-vertical-label { position: absolute; right: -2px; top: 50%; color: #607487; font-size: 8px; letter-spacing: 3px; writing-mode: vertical-rl; transform: translateY(-50%); }
+    .hero-index { position: absolute; right: 22px; bottom: 20px; display: flex; align-items: center; gap: 9px; color: #657589; font-size: 10px; letter-spacing: 2px; }
+    .hero-index span { color: #ff5c93; }
+    .hero-index i { display: block; width: 28px; height: 1px; background: #007ba7; }
+
+    @media (max-width: 850px) {
+      .cinematic-hero { grid-template-columns: 1fr .8fr; padding: 25px; min-height: 350px; }
+      .hero-visual { min-height: 250px; }
+      .hero-eyebrow { letter-spacing: 1.8px; }
+    }
+    @media (max-width: 560px) {
+      .cinematic-hero { grid-template-columns: 1fr; min-height: 0; padding: 28px 22px 45px; }
+      .hero-title { font-size: clamp(58px, 18vw, 88px); }
+      .hero-visual { min-height: 200px; margin-top: 12px; }
+      .hero-orbit { width: 210px; }
+      .orbit-two { width: 170px; }
+      .hero-core { width: 115px; }
+      .hero-footnote { margin-top: 22px; flex-wrap: wrap; }
+      .hero-vertical-label { right: 2px; }
+      .hero-index { right: 15px; bottom: 12px; }
+    }
+
   </style>
 </head>
 
@@ -532,6 +755,29 @@
 
       <!-- LIVE VISION -->
       <section class="view active" id="view-vision">
+      <!-- CINEMATIC HERO -->
+      <section class="cinematic-hero" aria-label="Vision Lab introduction">
+        <div class="hero-copy">
+          <div class="hero-eyebrow"><span class="hero-pulse"></span> A NEW ERA OF COMPUTER VISION</div>
+          <h2 class="hero-title">VISION<span>LAB</span></h2>
+          <p class="hero-tagline">WHERE THE REAL WORLD<br />MEETS <strong>INTELLIGENCE</strong></p>
+          <p class="hero-description">Real-time object detection, powered by AI. See more. Understand faster.</p>
+          <button class="hero-cta" type="button" data-go="vision"><span>↗</span> ENTER LIVE VISION</button>
+          <div class="hero-footnote"><span class="hero-line"></span> AI CONTROL CENTER <span class="hero-separator">/</span> REAL-TIME INFERENCE</div>
+        </div>
+        <div class="hero-visual" aria-hidden="true">
+          <div class="hero-orbit orbit-one"></div>
+          <div class="hero-orbit orbit-two"></div>
+          <div class="hero-core"><span class="core-eye"></span><span class="core-ring"></span></div>
+          <div class="hero-crosshair crosshair-a"></div>
+          <div class="hero-crosshair crosshair-b"></div>
+          <div class="hero-visual-label label-top">VISION ENGINE <b>ONLINE</b></div>
+          <div class="hero-visual-label label-bottom">PERCEPTION / 01</div>
+          <div class="hero-vertical-label">SEE BEYOND THE FRAME</div>
+        </div>
+        <div class="hero-index"><span>01</span><i></i> 03</div>
+      </section>
+
         <div class="grid-main">
           <div class="section-stack">
             <section class="panel">
