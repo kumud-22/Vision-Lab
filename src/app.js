@@ -807,18 +807,25 @@ function renderDashboardRecent() {
 // ============================================================
 
 const themes = {
-  cyan:   { accent: "#42e8ff", rgb: "66,232,255" },
-  purple: { accent: "#b78cff", rgb: "183,140,255" },
-  emerald:{ accent: "#3ee6b0", rgb: "62,230,176" },
-  red:    { accent: "#ff718c", rgb: "255,113,140" },
-  amber:  { accent: "#ffca70", rgb: "255,202,112" }
+  cerulean:  { accent: "#007ba7", rgb: "0,123,167" },
+  "neon-rose": { accent: "#ff2d75", rgb: "255,45,117" },
+  "jet-black": { accent: "#007ba7", rgb: "0,123,167" }
 };
 
 function applyTheme(name) {
-  const theme = themes[name] || themes.cyan;
+  const theme = themes[name] || themes.cerulean;
 
   document.documentElement.style.setProperty("--accent", theme.accent);
   document.documentElement.style.setProperty("--accent-rgb", theme.rgb);
+
+  // Keep the jet-black base while allowing Cerulean Blue and Neon Rose accents.
+  document.documentElement.style.setProperty("--bg", "#030405");
+  document.documentElement.style.setProperty("--panel", "#0a0c10");
+  document.documentElement.style.setProperty("--panel2", "#10141b");
+  document.documentElement.style.setProperty("--border", "#193747");
+  document.documentElement.style.setProperty("--danger", "#ff2d75");
+  document.documentElement.style.setProperty("--purple", "#ff2d75");
+  document.documentElement.style.setProperty("--green", "#ff2d75");
 
   document.querySelectorAll(".theme-btn").forEach(button => {
     button.classList.toggle("active", button.dataset.theme === name);
@@ -878,7 +885,7 @@ $("saveSettingsBtn").addEventListener("click", saveSettings);
 function restoreSettings() {
   const settings = loadJSON(STORAGE.settings, {});
 
-  applyTheme(settings.theme || "cyan");
+  applyTheme(settings.theme || "cerulean");
   applyDisplaySettings(settings);
 }
 
