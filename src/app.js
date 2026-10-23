@@ -807,30 +807,32 @@ function renderDashboardRecent() {
 // ============================================================
 
 const themes = {
-  cerulean:       { accent: "#00bfff", rgb: "0,191,255" },
-  "neon-rose":    { accent: "#ff2d75", rgb: "255,45,117" },
-  "laser-purple": { accent: "#b026ff", rgb: "176,38,255" },
-  "acid-green":   { accent: "#b6ff00", rgb: "182,255,0" },
-  "electric-blue":{ accent: "#3d5afe", rgb: "61,90,254" },
-  "neon-orange":  { accent: "#ff6d00", rgb: "255,109,0" },
-  "ice-cyan":     { accent: "#48f5ff", rgb: "72,245,255" },
-  "hot-magenta":  { accent: "#ff00aa", rgb: "255,0,170" }
+  cerulean:        { accent: "#00bfff", rgb: "0,191,255" },
+  "neon-rose":     { accent: "#ff2d75", rgb: "255,45,117" },
+  "laser-purple":  { accent: "#b026ff", rgb: "176,38,255" },
+  "acid-green":    { accent: "#b6ff00", rgb: "182,255,0" },
+  "electric-blue": { accent: "#3d5afe", rgb: "61,90,254" },
+  "neon-orange":   { accent: "#ff6d00", rgb: "255,109,0" },
+  "ice-cyan":      { accent: "#48f5ff", rgb: "72,245,255" },
+  "hot-magenta":   { accent: "#ff00aa", rgb: "255,0,170" }
 };
 
 function applyTheme(name) {
   const theme = themes[name] || themes.cerulean;
+  const root = document.documentElement;
 
-  document.documentElement.style.setProperty("--accent", theme.accent);
-  document.documentElement.style.setProperty("--accent-rgb", theme.rgb);
-
-  // Keep the jet-black base while allowing Cerulean Blue and Neon Rose accents.
-  document.documentElement.style.setProperty("--bg", "#030405");
-  document.documentElement.style.setProperty("--panel", "#0a0c10");
-  document.documentElement.style.setProperty("--panel2", "#10141b");
-  document.documentElement.style.setProperty("--border", "#193747");
-  document.documentElement.style.setProperty("--danger", "#ff2d75");
-  document.documentElement.style.setProperty("--purple", "#ff2d75");
-  document.documentElement.style.setProperty("--green", "#ff2d75");
+  // Keep the jet-black surfaces fixed and drive all neon accents from the selected theme.
+  root.style.setProperty("--accent", theme.accent);
+  root.style.setProperty("--accent-rgb", theme.rgb);
+  root.style.setProperty("--rose", theme.accent);
+  root.style.setProperty("--rose-rgb", theme.rgb);
+  root.style.setProperty("--bg", "#030405");
+  root.style.setProperty("--panel", "#0a0c10");
+  root.style.setProperty("--panel2", "#10141b");
+  root.style.setProperty("--border", "rgba(" + theme.rgb + ", .32)");
+  root.style.setProperty("--danger", theme.accent);
+  root.style.setProperty("--purple", theme.accent);
+  root.style.setProperty("--green", theme.accent);
 
   document.querySelectorAll(".theme-btn").forEach(button => {
     button.classList.toggle("active", button.dataset.theme === name);
@@ -849,7 +851,7 @@ function saveSettings() {
   const settings = {
     ...loadJSON(STORAGE.settings, {}),
     theme:
-      document.querySelector(".theme-btn.active")?.dataset.theme || "cyan",
+      document.querySelector(".theme-btn.active")?.dataset.theme || "cerulean",
     density: els.density.value,
     boxStyle: els.boxStyle.value,
     showSidebar: els.showSidebar.checked
