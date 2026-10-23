@@ -807,9 +807,14 @@ function renderDashboardRecent() {
 // ============================================================
 
 const themes = {
-  cerulean:  { accent: "#007ba7", rgb: "0,123,167" },
-  "neon-rose": { accent: "#ff2d75", rgb: "255,45,117" },
-  "jet-black": { accent: "#007ba7", rgb: "0,123,167" }
+  cerulean:       { accent: "#00bfff", rgb: "0,191,255" },
+  "neon-rose":    { accent: "#ff2d75", rgb: "255,45,117" },
+  "laser-purple": { accent: "#b026ff", rgb: "176,38,255" },
+  "acid-green":   { accent: "#b6ff00", rgb: "182,255,0" },
+  "electric-blue":{ accent: "#3d5afe", rgb: "61,90,254" },
+  "neon-orange":  { accent: "#ff6d00", rgb: "255,109,0" },
+  "ice-cyan":     { accent: "#48f5ff", rgb: "72,245,255" },
+  "hot-magenta":  { accent: "#ff00aa", rgb: "255,0,170" }
 };
 
 function applyTheme(name) {
