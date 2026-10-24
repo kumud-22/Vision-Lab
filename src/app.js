@@ -273,11 +273,16 @@ $("applyPipelineBtn").addEventListener("click", async () => {
  * The threshold is sent as workflow configuration to the inference
  * backend. It is not applied as a frontend-only display filter.
  */
-function buildDynamicWorkflow(modelId, confidence) {
+function buildDynamicWorkflow(modelId, confidence, workspaceName) {
   if (!modelId) {
     throw new Error(
       "Enter your exact trained Roboflow model ID in Pipeline settings."
     );
+  }
+
+  const fullModelId = modelId.includes("/") ? modelId : `${workspaceName}/${modelId}`;
+  if (!workspaceName && !modelId.includes("/")) {
+    throw new Error("Enter your Roboflow workspace name in Pipeline settings.");
   }
 
   return {
@@ -285,17 +290,17 @@ function buildDynamicWorkflow(modelId, confidence) {
 
     inputs: [
       {
-        type: "InferenceImage",
+        type: "WorkflowImage",
         name: "image"
       }
     ],
 
     steps: [
       {
-        type: "roboflow_core/roboflow_object_detection_model@v2",
-        name: "model",
+        type: "roboflow_core/roboflow_object_detection_model@v3",
+        name: "model_1",
         images: "$inputs.image",
-        model_id: modelId,
+        model_id: fullModelId,
         confidence_mode: "custom",
         custom_confidence: confidence
       },
@@ -303,13 +308,14 @@ function buildDynamicWorkflow(modelId, confidence) {
         type: "roboflow_core/bounding_box_visualization@v1",
         name: "bounding_box_visualization",
         image: "$inputs.image",
-        predictions: "$steps.model.predictions"
+        predictions: "$steps.model_1.predictions"
       },
       {
-        type: "roboflow_core/label_visualization@v1",
+        type: "roboflow_core/label_visualization@v2",
         name: "label_visualization",
         image: "$steps.bounding_box_visualization.image",
-        predictions: "$steps.model.predictions"
+        predictions: "$steps.model_1.predictions",
+        text: "Class"
       }
     ],
 
@@ -324,7 +330,7 @@ function buildDynamicWorkflow(modelId, confidence) {
         type: "JsonField",
         name: "predictions",
         coordinates_system: "own",
-        selector: "$steps.model.predictions"
+        selector: "$steps.model_1.predictions"
       }
     ]
   };
@@ -360,7 +366,8 @@ async function connectToRoboflow() {
   if (config.mode === "dynamic") {
     const workflowSpec = buildDynamicWorkflow(
       config.modelId,
-      config.confidence
+      config.confidence,
+      config.workspaceName
     );
 
     wrtcParams = {
